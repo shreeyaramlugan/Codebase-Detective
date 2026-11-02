@@ -19,9 +19,7 @@ export interface ResearchEvidence {
   retrievedAt: string;
 }
 
-export type GroundingEvidence =
-  | CodeEvidence
-  | ResearchEvidence;
+export type GroundingEvidence = CodeEvidence | ResearchEvidence;
 
 export interface GroundingContext {
   findings: AnalysisFinding[];

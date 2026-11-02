@@ -2,13 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { validateEvidenceReferences } from "../../../features/ai/grounding/validate-references";
 
-import type {
-  GroundingContext,
-} from "../../../features/ai/grounding/evidence";
+import type { GroundingContext } from "../../../features/ai/grounding/evidence";
 
-import type {
-  AIExplanation,
-} from "../../../features/ai/providers/explanation";
+import type { AIExplanation } from "../../../features/ai/providers/explanation";
 
 const context: GroundingContext = {
   findings: [],
@@ -39,10 +35,7 @@ describe("Evidence grounding", () => {
       ],
     };
 
-    const result = validateEvidenceReferences(
-      explanation,
-      context,
-    );
+    const result = validateEvidenceReferences(explanation, context);
 
     expect(result.valid).toBe(true);
     expect(result.acceptedReferences).toHaveLength(1);
@@ -62,10 +55,7 @@ describe("Evidence grounding", () => {
       ],
     };
 
-    const result = validateEvidenceReferences(
-      explanation,
-      context,
-    );
+    const result = validateEvidenceReferences(explanation, context);
 
     expect(result.valid).toBe(false);
     expect(result.rejectedReferences).toHaveLength(1);
@@ -85,10 +75,7 @@ describe("Evidence grounding", () => {
       ],
     };
 
-    const result = validateEvidenceReferences(
-      explanation,
-      context,
-    );
+    const result = validateEvidenceReferences(explanation, context);
 
     expect(result.valid).toBe(false);
   });
@@ -105,10 +92,7 @@ describe("Evidence grounding", () => {
       ],
     };
 
-    const result = validateEvidenceReferences(
-      explanation,
-      context,
-    );
+    const result = validateEvidenceReferences(explanation, context);
 
     expect(result.valid).toBe(true);
     expect(result.acceptedReferences).toHaveLength(1);

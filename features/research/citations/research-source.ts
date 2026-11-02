@@ -1,6 +1,4 @@
-export type ResearchSourceType =
-  | "official_documentation"
-  | "academic";
+export type ResearchSourceType = "official_documentation" | "academic";
 
 export interface ResearchSource {
   id: string;

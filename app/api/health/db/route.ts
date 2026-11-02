@@ -7,9 +7,6 @@ export async function GET() {
 
     return NextResponse.json({ database: "connected" });
   } catch {
-    return NextResponse.json(
-      { database: "unavailable" },
-      { status: 503 },
-    );
+    return NextResponse.json({ database: "unavailable" }, { status: 503 });
   }
 }

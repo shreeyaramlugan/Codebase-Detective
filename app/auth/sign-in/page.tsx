@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
 
 export default function SignInPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
+    setMessage("");
 
     const { error } = await authClient.signIn.email({
       email,
@@ -21,7 +25,7 @@ export default function SignInPage() {
       return;
     }
 
-    window.location.href = "/dashboard";
+    router.push("/dashboard");
   }
 
   return (
@@ -47,21 +51,25 @@ export default function SignInPage() {
           required
         />
 
-        <button className="w-full rounded bg-stone-900 p-3 text-white">
+        <button
+          type="submit"
+          className="w-full rounded bg-stone-900 p-3 text-white"
+        >
           Sign in
         </button>
+
         <button
-  type="button"
-  onClick={async () => {
-await authClient.signIn.social({
-  provider: "github",
-  callbackURL: "/dashboard",
-});
-  }}
-  className="w-full rounded border p-3"
->
-  Continue with GitHub
-</button>
+          type="button"
+          onClick={async () => {
+            await authClient.signIn.social({
+              provider: "github",
+              callbackURL: "/dashboard",
+            });
+          }}
+          className="w-full rounded border p-3"
+        >
+          Continue with GitHub
+        </button>
       </form>
 
       <p className="mt-4 text-sm">{message}</p>

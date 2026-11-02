@@ -1,30 +1,17 @@
-import type {
-  ResearchProvider,
-  ResearchQuery,
-} from "./research-provider";
+import type { ResearchProvider, ResearchQuery } from "./research-provider";
 
-import type {
-  ResearchSource,
-} from "../citations/research-source";
+import type { ResearchSource } from "../citations/research-source";
 
 export interface AcademicSearchAdapter {
-  search(
-    query: ResearchQuery,
-  ): Promise<ResearchSource[]>;
+  search(query: ResearchQuery): Promise<ResearchSource[]>;
 }
 
-export class AcademicProvider
-  implements ResearchProvider
-{
+export class AcademicProvider implements ResearchProvider {
   readonly name = "academic";
 
-  constructor(
-    private readonly adapter: AcademicSearchAdapter,
-  ) {}
+  constructor(private readonly adapter: AcademicSearchAdapter) {}
 
-  async search(
-    query: ResearchQuery,
-  ): Promise<ResearchSource[]> {
+  async search(query: ResearchQuery): Promise<ResearchSource[]> {
     if (!query.query.trim()) {
       return [];
     }

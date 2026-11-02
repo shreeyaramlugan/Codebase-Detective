@@ -1,15 +1,8 @@
-import type {
-  ResearchProvider,
-  ResearchQuery,
-} from "./research-provider";
+import type { ResearchProvider, ResearchQuery } from "./research-provider";
 
-import type {
-  ResearchSource,
-} from "../citations/research-source";
+import type { ResearchSource } from "../citations/research-source";
 
-export class DocumentationProvider
-  implements ResearchProvider
-{
+export class DocumentationProvider implements ResearchProvider {
   readonly name = "official-documentation";
 
   private readonly sources: ResearchSource[];
@@ -18,21 +11,13 @@ export class DocumentationProvider
     this.sources = sources;
   }
 
-  async search(
-    query: ResearchQuery,
-  ): Promise<ResearchSource[]> {
-    const searchTerms = query.query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
+  async search(query: ResearchQuery): Promise<ResearchSource[]> {
+    const searchTerms = query.query.toLowerCase().split(/\s+/).filter(Boolean);
 
     const results = this.sources.filter((source) => {
-      const content =
-        `${source.title} ${source.excerpt}`.toLowerCase();
+      const content = `${source.title} ${source.excerpt}`.toLowerCase();
 
-      return searchTerms.every((term) =>
-        content.includes(term),
-      );
+      return searchTerms.every((term) => content.includes(term));
     });
 
     return results.slice(0, query.limit ?? 5);

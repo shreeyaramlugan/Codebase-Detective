@@ -1,8 +1,4 @@
-export type ImportKind =
-  | "es"
-  | "dynamic"
-  | "require"
-  | "type";
+export type ImportKind = "es" | "dynamic" | "require" | "type";
 
 export interface ParsedImport {
   source: string;
@@ -19,13 +15,7 @@ export interface ParsedExport {
 
 export interface ParsedDeclaration {
   name: string;
-  kind:
-    | "function"
-    | "class"
-    | "interface"
-    | "type"
-    | "variable"
-    | "enum";
+  kind: "function" | "class" | "interface" | "type" | "variable" | "enum";
   line: number;
   endLine: number;
 }

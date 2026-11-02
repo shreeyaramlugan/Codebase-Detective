@@ -1,8 +1,6 @@
 import type { GroundingContext } from "../grounding/evidence";
 
-export function buildExplanationPrompt(
-  context: GroundingContext,
-): string {
+export function buildExplanationPrompt(context: GroundingContext): string {
   return `Explain the supplied Codebase Detective findings.
 
 STRICT RULES:

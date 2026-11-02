@@ -3,26 +3,18 @@ import type {
   ResearchQuery,
 } from "../providers/research-provider";
 
-import type {
-  ResearchSource,
-} from "../citations/research-source";
+import type { ResearchSource } from "../citations/research-source";
 
 export class ResearchService {
-  constructor(
-    private readonly providers: ResearchProvider[],
-  ) {}
+  constructor(private readonly providers: ResearchProvider[]) {}
 
-  async search(
-    query: ResearchQuery,
-  ): Promise<ResearchSource[]> {
+  async search(query: ResearchQuery): Promise<ResearchSource[]> {
     if (!query.query.trim()) {
       return [];
     }
 
     const results = await Promise.all(
-      this.providers.map((provider) =>
-        provider.search(query).catch(() => []),
-      ),
+      this.providers.map((provider) => provider.search(query).catch(() => [])),
     );
 
     const uniqueSources = new Map<string, ResearchSource>();
@@ -35,9 +27,6 @@ export class ResearchService {
       }
     }
 
-    return Array.from(uniqueSources.values()).slice(
-      0,
-      query.limit ?? 10,
-    );
+    return Array.from(uniqueSources.values()).slice(0, query.limit ?? 10);
   }
 }

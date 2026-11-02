@@ -3,13 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { ResearchService } from "../../../features/research/retrieval";
 import { DocumentationProvider } from "../../../features/research/providers";
 
-import type {
-  ResearchProvider,
-} from "../../../features/research/providers";
+import type { ResearchProvider } from "../../../features/research/providers";
 
-import type {
-  ResearchSource,
-} from "../../../features/research/citations";
+import type { ResearchSource } from "../../../features/research/citations";
 
 const source: ResearchSource = {
   id: "DOC-001",
@@ -44,10 +40,7 @@ describe("ResearchService", () => {
       search: vi.fn().mockResolvedValue([source]),
     };
 
-    const service = new ResearchService([
-      providerA,
-      providerB,
-    ]);
+    const service = new ResearchService([providerA, providerB]);
 
     const results = await service.search({
       query: "TypeScript",
@@ -59,9 +52,7 @@ describe("ResearchService", () => {
   it("continues when a provider fails", async () => {
     const failingProvider: ResearchProvider = {
       name: "failing",
-      search: vi.fn().mockRejectedValue(
-        new Error("Provider unavailable"),
-      ),
+      search: vi.fn().mockRejectedValue(new Error("Provider unavailable")),
     };
 
     const workingProvider: ResearchProvider = {
@@ -69,10 +60,7 @@ describe("ResearchService", () => {
       search: vi.fn().mockResolvedValue([source]),
     };
 
-    const service = new ResearchService([
-      failingProvider,
-      workingProvider,
-    ]);
+    const service = new ResearchService([failingProvider, workingProvider]);
 
     const results = await service.search({
       query: "TypeScript",

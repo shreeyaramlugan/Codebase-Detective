@@ -1,10 +1,6 @@
-import type {
-  ResearchSource,
-} from "./research-source";
+import type { ResearchSource } from "./research-source";
 
-export function validateResearchSource(
-  source: ResearchSource,
-): boolean {
+export function validateResearchSource(source: ResearchSource): boolean {
   try {
     const url = new URL(source.url);
 

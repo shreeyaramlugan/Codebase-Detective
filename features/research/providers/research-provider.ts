@@ -1,6 +1,4 @@
-import type {
-  ResearchSource,
-} from "../citations/research-source";
+import type { ResearchSource } from "../citations/research-source";
 
 export interface ResearchQuery {
   query: string;
@@ -10,7 +8,5 @@ export interface ResearchQuery {
 export interface ResearchProvider {
   readonly name: string;
 
-  search(
-    query: ResearchQuery,
-  ): Promise<ResearchSource[]>;
+  search(query: ResearchQuery): Promise<ResearchSource[]>;
 }

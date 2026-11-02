@@ -21,7 +21,5 @@ export interface AIResponse {
 export interface AIProvider {
   readonly name: string;
 
-  generate(
-    request: AIRequest,
-  ): Promise<AIResponse>;
+  generate(request: AIRequest): Promise<AIResponse>;
 }

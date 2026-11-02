@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -30,9 +29,7 @@ export default function SignUpPage() {
 
   return (
     <main className="mx-auto max-w-md p-8">
-      <h1 className="text-2xl font-bold">
-        Create your account
-      </h1>
+      <h1 className="text-2xl font-bold">Create your account</h1>
 
       <form onSubmit={handleSignUp} className="mt-6 space-y-4">
         <input

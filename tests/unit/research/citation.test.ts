@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { validateResearchSource } from "../../../features/research/citations";
 
-import type {
-  ResearchSource,
-} from "../../../features/research/citations";
+import type { ResearchSource } from "../../../features/research/citations";
 
 const validSource: ResearchSource = {
   id: "DOC-001",

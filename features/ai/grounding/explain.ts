@@ -13,10 +13,7 @@ import { validateEvidenceReferences } from "./validate-references";
 function parseExplanation(content: string): AIExplanation {
   const parsed: unknown = JSON.parse(content);
 
-  if (
-    typeof parsed !== "object" ||
-    parsed === null
-  ) {
+  if (typeof parsed !== "object" || parsed === null) {
     throw new Error("Invalid AI explanation.");
   }
 
@@ -32,21 +29,14 @@ function parseExplanation(content: string): AIExplanation {
     throw new Error("AI explanation has an invalid structure.");
   }
 
-  if (
-    !value.recommendations.every(
-      (item) => typeof item === "string",
-    )
-  ) {
+  if (!value.recommendations.every((item) => typeof item === "string")) {
     throw new Error("Invalid recommendation format.");
   }
 
   const references = value.evidenceReferences;
 
   for (const reference of references) {
-    if (
-      typeof reference !== "object" ||
-      reference === null
-    ) {
+    if (typeof reference !== "object" || reference === null) {
       throw new Error("Invalid evidence reference.");
     }
 
@@ -83,10 +73,7 @@ export async function explainFindings(
 
   const explanation = parseExplanation(response.content);
 
-  const validation = validateEvidenceReferences(
-    explanation,
-    context,
-  );
+  const validation = validateEvidenceReferences(explanation, context);
 
   if (!validation.valid) {
     throw new Error(

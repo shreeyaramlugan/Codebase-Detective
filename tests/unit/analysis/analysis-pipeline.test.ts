@@ -15,9 +15,7 @@ describe("Codebase Detective analysis pipeline", () => {
     const result = analyzeFile(
       source,
       "src/app/page.tsx",
-      new Set([
-        "src/app/page.tsx",
-      ]),
+      new Set(["src/app/page.tsx"]),
     );
 
     expect(result.parsed.isValid).toBe(true);
@@ -37,7 +35,7 @@ describe("Codebase Detective analysis pipeline", () => {
   it("does not create findings for invalid source", () => {
     const result = analyzeFile(
       "function broken( {",
-      "src/app/broken.ts",
+      "src/app/broken.txt",
       new Set(),
     );
 

@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+dist
+build
+coverage
+.vercel
+src/generated
+app/generated
+prisma/generated
+package-lock.json

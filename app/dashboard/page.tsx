@@ -13,17 +13,11 @@ async function DashboardContent() {
 
   return (
     <main className="min-h-screen bg-stone-950 p-8 text-white">
-      <h1 className="text-3xl font-bold">
-        Welcome, {session.user.name}
-      </h1>
+      <h1 className="text-3xl font-bold">Welcome, {session.user.name}</h1>
 
-      <p className="mt-3 text-stone-400">
-        Your Codebase Detective workspace.
-      </p>
+      <p className="mt-3 text-stone-400">Your Codebase Detective workspace.</p>
 
-      <p className="mt-6 text-sm text-orange-400">
-        Authentication successful.
-      </p>
+      <p className="mt-6 text-sm text-orange-400">Authentication successful.</p>
     </main>
   );
 }

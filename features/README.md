@@ -3,13 +3,16 @@
 Codebase Detective uses a modular feature architecture.
 
 ## Analysis
+
 Responsible for deterministic source code analysis.
 
 ## Research
+
 Responsible for retrieving and managing external technical
 and scholarly evidence.
 
 ## AI
+
 Responsible for explaining existing findings using
 verified evidence.
 

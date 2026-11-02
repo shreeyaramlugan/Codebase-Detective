@@ -14,9 +14,7 @@ describe("IMPORT001: unresolved relative imports", () => {
           column: 1,
         },
       ],
-      knownFiles: new Set([
-        "src/app/page.tsx",
-      ]),
+      knownFiles: new Set(["src/app/page.tsx"]),
     });
 
     expect(findings).toHaveLength(1);
@@ -35,10 +33,7 @@ describe("IMPORT001: unresolved relative imports", () => {
           column: 1,
         },
       ],
-      knownFiles: new Set([
-        "src/app/page.tsx",
-        "src/app/Button.tsx",
-      ]),
+      knownFiles: new Set(["src/app/page.tsx", "src/app/Button.tsx"]),
     });
 
     expect(findings).toHaveLength(0);
@@ -89,9 +84,7 @@ describe("IMPORT001: unresolved relative imports", () => {
           column: 1,
         },
       ],
-      knownFiles: new Set([
-        "src/app/components/index.tsx",
-      ]),
+      knownFiles: new Set(["src/app/components/index.tsx"]),
     });
 
     expect(findings).toHaveLength(0);

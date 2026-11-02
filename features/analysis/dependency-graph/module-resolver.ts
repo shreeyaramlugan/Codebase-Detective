@@ -1,9 +1,4 @@
-const EXTENSIONS = [
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-];
+const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
 
 function normalisePath(path: string): string {
   const segments: string[] = [];
@@ -26,15 +21,11 @@ function getDirectory(path: string): string {
   const normalised = normalisePath(path);
   const lastSlash = normalised.lastIndexOf("/");
 
-  return lastSlash === -1
-    ? ""
-    : normalised.slice(0, lastSlash);
+  return lastSlash === -1 ? "" : normalised.slice(0, lastSlash);
 }
 
 function joinPath(base: string, relative: string): string {
-  return normalisePath(
-    `${base}/${relative}`,
-  );
+  return normalisePath(`${base}/${relative}`);
 }
 
 export function resolveRelativeImport(
@@ -46,19 +37,12 @@ export function resolveRelativeImport(
     return null;
   }
 
-  const basePath = joinPath(
-    getDirectory(importerPath),
-    importSource,
-  );
+  const basePath = joinPath(getDirectory(importerPath), importSource);
 
   const candidates = [
     basePath,
-    ...EXTENSIONS.map(
-      (extension) => `${basePath}${extension}`,
-    ),
-    ...EXTENSIONS.map(
-      (extension) => `${basePath}/index${extension}`,
-    ),
+    ...EXTENSIONS.map((extension) => `${basePath}${extension}`),
+    ...EXTENSIONS.map((extension) => `${basePath}/index${extension}`),
   ];
 
   for (const candidate of candidates) {

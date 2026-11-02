@@ -1,9 +1,4 @@
-export type FindingSeverity =
-  | "info"
-  | "low"
-  | "medium"
-  | "high"
-  | "critical";
+export type FindingSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 export interface CodeLocation {
   path: string;

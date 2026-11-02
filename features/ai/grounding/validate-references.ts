@@ -3,9 +3,7 @@ import type {
   AIExplanation,
 } from "../providers/explanation";
 
-import type {
-  GroundingContext,
-} from "./evidence";
+import type { GroundingContext } from "./evidence";
 
 export interface GroundingValidation {
   valid: boolean;
@@ -19,10 +17,7 @@ export function validateEvidenceReferences(
   context: GroundingContext,
 ): GroundingValidation {
   const availableEvidence = new Map(
-    context.evidence.map((item) => [
-      item.id,
-      item.type,
-    ]),
+    context.evidence.map((item) => [item.id, item.type]),
   );
 
   const acceptedReferences: EvidenceReference[] = [];
@@ -34,25 +29,17 @@ export function validateEvidenceReferences(
 
     if (!actualType) {
       rejectedReferences.push(reference);
-      errors.push(
-        `Unknown evidence reference: ${reference.id}`,
-      );
+      errors.push(`Unknown evidence reference: ${reference.id}`);
       continue;
     }
 
     if (actualType !== reference.type) {
       rejectedReferences.push(reference);
-      errors.push(
-        `Evidence type mismatch: ${reference.id}`,
-      );
+      errors.push(`Evidence type mismatch: ${reference.id}`);
       continue;
     }
 
-    if (
-      !acceptedReferences.some(
-        (item) => item.id === reference.id,
-      )
-    ) {
+    if (!acceptedReferences.some((item) => item.id === reference.id)) {
       acceptedReferences.push(reference);
     }
   }

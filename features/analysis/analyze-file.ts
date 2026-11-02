@@ -6,10 +6,7 @@ export function analyzeFile(
   filePath: string,
   knownFiles: ReadonlySet<string>,
 ) {
-  const parsed = parseTypeScript(
-    sourceText,
-    filePath,
-  );
+  const parsed = parseTypeScript(sourceText, filePath);
 
   const findings = parsed.isValid
     ? checkUnresolvedImports({

@@ -18,9 +18,7 @@ function getColumn(sourceFile: ts.SourceFile, position: number) {
   return sourceFile.getLineAndCharacterOfPosition(position).character + 1;
 }
 
-function getDeclarationKind(
-  node: ts.Node,
-): ParsedDeclaration["kind"] | null {
+function getDeclarationKind(node: ts.Node): ParsedDeclaration["kind"] | null {
   if (ts.isFunctionDeclaration(node)) return "function";
   if (ts.isClassDeclaration(node)) return "class";
   if (ts.isInterfaceDeclaration(node)) return "interface";
@@ -46,9 +44,7 @@ function getDeclarationName(node: ts.Node): string | null {
   if (ts.isVariableStatement(node)) {
     return node.declarationList.declarations
       .map((declaration) => {
-        return ts.isIdentifier(declaration.name)
-          ? declaration.name.text
-          : null;
+        return ts.isIdentifier(declaration.name) ? declaration.name.text : null;
       })
       .filter((name): name is string => name !== null)
       .join(", ");
@@ -57,9 +53,7 @@ function getDeclarationName(node: ts.Node): string | null {
   return null;
 }
 
-function getImportKind(
-  node: ts.ImportDeclaration,
-): ImportKind {
+function getImportKind(node: ts.ImportDeclaration): ImportKind {
   if (node.importClause?.isTypeOnly) {
     return "type";
   }
@@ -135,19 +129,19 @@ export function parseTypeScript(
     }
 
     if (
-  ts.isExportDeclaration(node) &&
-  !node.moduleSpecifier &&
-  node.exportClause &&
-  ts.isNamedExports(node.exportClause)
-) {
-  for (const element of node.exportClause.elements) {
-    exports.push({
-      name: element.name.text,
-      kind: "named",
-      line: getLine(sourceFile, node.getStart(sourceFile)),
-    });
-  }
-}
+      ts.isExportDeclaration(node) &&
+      !node.moduleSpecifier &&
+      node.exportClause &&
+      ts.isNamedExports(node.exportClause)
+    ) {
+      for (const element of node.exportClause.elements) {
+        exports.push({
+          name: element.name.text,
+          kind: "named",
+          line: getLine(sourceFile, node.getStart(sourceFile)),
+        });
+      }
+    }
 
     if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
       exports.push({
@@ -157,10 +151,7 @@ export function parseTypeScript(
       });
     }
 
-    if (
-      ts.isExportAssignment(node) &&
-      !node.isExportEquals
-    ) {
+    if (ts.isExportAssignment(node) && !node.isExportEquals) {
       exports.push({
         name: "default",
         kind: "default",
@@ -173,8 +164,7 @@ export function parseTypeScript(
 
       if (
         modifiers?.some(
-          (modifier) =>
-            modifier.kind === ts.SyntaxKind.ExportKeyword,
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
         )
       ) {
         const name = getDeclarationName(node);
@@ -190,9 +180,7 @@ export function parseTypeScript(
 
           if (
             modifiers.some(
-              (modifier) =>
-                modifier.kind ===
-                ts.SyntaxKind.DefaultKeyword,
+              (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword,
             )
           ) {
             exports.push({
@@ -228,31 +216,24 @@ export function parseTypeScript(
 
   visit(sourceFile);
 
-const diagnostics = (
-  sourceFile as ts.SourceFile & {
-    parseDiagnostics: readonly ts.Diagnostic[];
-  }
-).parseDiagnostics.map((diagnostic: ts.Diagnostic) => {
-  const position = diagnostic.start ?? 0;
+  const diagnostics = (
+    sourceFile as ts.SourceFile & {
+      parseDiagnostics: readonly ts.Diagnostic[];
+    }
+  ).parseDiagnostics.map((diagnostic: ts.Diagnostic) => {
+    const position = diagnostic.start ?? 0;
 
-  const location = sourceFile.getLineAndCharacterOfPosition(
-    position,
-  );
+    const location = sourceFile.getLineAndCharacterOfPosition(position);
 
-  return {
-    message: ts.flattenDiagnosticMessageText(
-      diagnostic.messageText,
-      "\n",
-    ),
-    line: location.line + 1,
-    column: location.character + 1,
-    code: diagnostic.code,
-  };
-});
+    return {
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      line: location.line + 1,
+      column: location.character + 1,
+      code: diagnostic.code,
+    };
+  });
   const lineCount =
-    sourceText.length === 0
-      ? 0
-      : sourceText.split(/\r\n|\r|\n/).length;
+    sourceText.length === 0 ? 0 : sourceText.split(/\r\n|\r|\n/).length;
 
   return {
     filePath,

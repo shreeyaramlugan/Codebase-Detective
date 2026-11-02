@@ -9,8 +9,6 @@ export function createAIProvider(): AIProvider {
       return new MockAIProvider();
 
     default:
-      throw new Error(
-        `Unsupported AI provider: ${provider}`,
-      );
+      throw new Error(`Unsupported AI provider: ${provider}`);
   }
 }

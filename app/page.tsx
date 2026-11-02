@@ -18,7 +18,9 @@ export default function HomePage() {
         </p>
 
         <div className="mt-10 rounded-xl border border-stone-800 bg-stone-900 p-6">
-          <h2 className="text-lg font-semibold">Your investigation starts here.</h2>
+          <h2 className="text-lg font-semibold">
+            Your investigation starts here.
+          </h2>
           <p className="mt-2 text-sm text-stone-400">
             Repository ingestion and analysis are coming next.
           </p>
