@@ -4,13 +4,10 @@ import { requireSession } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   try {
-    // 1. Verify the user is signed in
     const session = await requireSession();
 
-    // 2. Read the repository details
     const body = await request.json();
 
-    // 3. Create the repository under the signed-in user
     const repository = await prisma.repository.create({
       data: {
         ownerId: session.user.id,
