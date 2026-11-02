@@ -92,7 +92,7 @@ export default function RecentActivity({
         </h2>
 
         <p className="mt-1 text-sm text-stone-400">
-          Keep track of what's happening across your investigations.
+          Keep track of what&apos;s happening across your investigations.
         </p>
       </div>
 

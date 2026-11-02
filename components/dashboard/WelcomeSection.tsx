@@ -56,7 +56,7 @@ export default function WelcomeSection({
 
           <div className="mt-5 flex items-center gap-2 text-xs text-stone-500">
             <span className="h-2 w-2 rounded-full bg-orange-400" />
-            Repository submission is being built in Sprint 01.5.
+           Add a repository to start your investigation.
           </div>
         </div>
 
