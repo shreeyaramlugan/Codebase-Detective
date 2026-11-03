@@ -35,10 +35,9 @@ describe("validateGitHubRepository", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([{ sha: "a".repeat(40) }]),
-          { status: 200 },
-        ),
+        new Response(JSON.stringify([{ sha: "a".repeat(40) }]), {
+          status: 200,
+        }),
       );
 
     const result = await validateGitHubRepository(
@@ -67,10 +66,9 @@ describe("validateGitHubRepository", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([{ sha: "b".repeat(40) }]),
-          { status: 200 },
-        ),
+        new Response(JSON.stringify([{ sha: "b".repeat(40) }]), {
+          status: 200,
+        }),
       );
 
     const result = await validateGitHubRepository(
@@ -98,9 +96,7 @@ describe("validateGitHubRepository", () => {
     );
 
     await expect(
-      validateGitHubRepository(
-        "https://github.com/owner/missing-repo",
-      ),
+      validateGitHubRepository("https://github.com/owner/missing-repo"),
     ).rejects.toBeInstanceOf(GitHubApiError);
   });
 });

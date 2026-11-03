@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -20,7 +19,6 @@ export default function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    
     <div className="min-h-screen bg-stone-950 text-stone-100">
       <DashboardSidebar
         mobileOpen={mobileOpen}
@@ -34,14 +32,11 @@ export default function DashboardShell({
           onMenuClick={() => setMobileOpen(true)}
         />
 
-       <main className="mx-auto w-full max-w-7xl space-y-10 px-4 py-8 sm:px-6 lg:px-8">
-  <WelcomeSection
-    name={user.name}
-    email={user.email}
-  />
+        <main className="mx-auto w-full max-w-7xl space-y-10 px-4 py-8 sm:px-6 lg:px-8">
+          <WelcomeSection name={user.name} email={user.email} />
 
-  {children}
-</main>
+          {children}
+        </main>
       </div>
     </div>
   );

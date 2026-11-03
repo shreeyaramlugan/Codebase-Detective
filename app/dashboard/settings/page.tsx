@@ -1,4 +1,3 @@
-
 import { getCurrentSession } from "@/lib/auth/session";
 import ProfileEditor from "@/components/dashboard/ProfileEditor";
 
@@ -21,16 +20,13 @@ export default async function SettingsPage() {
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-stone-400">
-          Manage your account and personalise your Codebase Detective
-          workspace.
+          Manage your account and personalise your Codebase Detective workspace.
         </p>
       </div>
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-stone-100">
-            Profile
-          </h2>
+          <h2 className="text-lg font-semibold text-stone-100">Profile</h2>
 
           <p className="mt-1 text-sm text-stone-400">
             Update how your identity appears across your workspace.

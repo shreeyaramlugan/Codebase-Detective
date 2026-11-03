@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -70,9 +69,7 @@ function NavIcon({ name }: { name: string }) {
         <path d="M12 8v4M5 16v-4h14v4" />
       </>
     ),
-    shield: (
-      <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
-    ),
+    shield: <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />,
     settings: (
       <>
         <circle cx="12" cy="12" r="3" />
@@ -134,9 +131,7 @@ export default function DashboardSidebar({
               <p className="text-sm font-semibold tracking-wide text-stone-100">
                 Codebase Detective
               </p>
-              <p className="text-xs text-stone-500">
-                Investigation workspace
-              </p>
+              <p className="text-xs text-stone-500">Investigation workspace</p>
             </div>
           </Link>
 
@@ -159,9 +154,7 @@ export default function DashboardSidebar({
           <nav className="space-y-1" aria-label="Main navigation">
             {navigation.map((item) => {
               const active =
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : false;
+                item.href === "/dashboard" ? pathname === "/dashboard" : false;
 
               return item.upcoming ? (
                 <div

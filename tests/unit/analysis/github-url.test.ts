@@ -24,9 +24,7 @@ describe("parseGitHubRepositoryUrl", () => {
       "https://github.com/facebook/react/",
     );
 
-    expect(result.canonicalUrl).toBe(
-      "https://github.com/facebook/react",
-    );
+    expect(result.canonicalUrl).toBe("https://github.com/facebook/react");
   });
 
   it("removes the .git suffix", () => {
@@ -66,24 +64,18 @@ describe("parseGitHubRepositoryUrl", () => {
     "https://github.com:8080/facebook/react",
     "https://github.com/facebook/react?tab=readme",
   ])("rejects invalid URL: %s", (url) => {
-    expect(() => parseGitHubRepositoryUrl(url)).toThrow(
-      GitHubUrlError,
-    );
+    expect(() => parseGitHubRepositoryUrl(url)).toThrow(GitHubUrlError);
   });
 
   it("rejects invalid owner names", () => {
     expect(() =>
-      parseGitHubRepositoryUrl(
-        "https://github.com/-invalid/repository",
-      ),
+      parseGitHubRepositoryUrl("https://github.com/-invalid/repository"),
     ).toThrow("owner is invalid");
   });
 
   it("rejects invalid repository names", () => {
     expect(() =>
-      parseGitHubRepositoryUrl(
-        "https://github.com/facebook/../",
-      ),
+      parseGitHubRepositoryUrl("https://github.com/facebook/../"),
     ).toThrow();
   });
 });

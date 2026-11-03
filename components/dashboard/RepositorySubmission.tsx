@@ -7,16 +7,13 @@ export default function RepositorySubmission() {
   const router = useRouter();
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState<
-    "success" | "error" | ""
-  >("");
+  const [messageType, setMessageType] = useState<"success" | "error" | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setMessageType("");
-
 
     const trimmedUrl = repositoryUrl.trim();
 
@@ -42,26 +39,20 @@ export default function RepositorySubmission() {
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(
-          data.error || "Unable to submit this repository."
-        );
+        setMessage(data.error || "Unable to submit this repository.");
         setMessageType("error");
         return;
       }
 
       setRepositoryUrl("");
 
-      setMessage(
-        data.message || "Repository submitted successfully."
-      );
+      setMessage(data.message || "Repository submitted successfully.");
       setMessageType("success");
 
       // Refresh the dashboard once real repository data is connected.
       router.refresh();
     } catch {
-      setMessage(
-        "Unable to reach the server. Please try again."
-      );
+      setMessage("Unable to reach the server. Please try again.");
       setMessageType("error");
     } finally {
       setIsSubmitting(false);
@@ -76,8 +67,8 @@ export default function RepositorySubmission() {
         </h2>
 
         <p className="mt-1 text-sm leading-6 text-stone-400">
-          Connect a public GitHub repository to start exploring
-          its structure and codebase.
+          Connect a public GitHub repository to start exploring its structure
+          and codebase.
         </p>
       </div>
 
@@ -95,17 +86,14 @@ export default function RepositorySubmission() {
             type="url"
             placeholder="https://github.com/owner/repository"
             value={repositoryUrl}
-            onChange={(event) =>
-              setRepositoryUrl(event.target.value)
-            }
+            onChange={(event) => setRepositoryUrl(event.target.value)}
             disabled={isSubmitting}
             required
             className="w-full rounded-xl border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 disabled:opacity-60"
           />
 
           <p className="mt-2 text-xs text-stone-500">
-            Only public GitHub repositories are supported
-            in this version.
+            Only public GitHub repositories are supported in this version.
           </p>
         </div>
 

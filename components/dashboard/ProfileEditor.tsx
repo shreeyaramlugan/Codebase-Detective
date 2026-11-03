@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, type FormEvent } from "react";
@@ -10,10 +9,7 @@ type ProfileEditorProps = {
   email: string;
 };
 
-export default function ProfileEditor({
-  name,
-  email,
-}: ProfileEditorProps) {
+export default function ProfileEditor({ name, email }: ProfileEditorProps) {
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState(name);
@@ -93,13 +89,9 @@ export default function ProfileEditor({
             {displayName}
           </p>
 
-          <p className="truncate text-xs text-stone-400">
-            {email}
-          </p>
+          <p className="truncate text-xs text-stone-400">{email}</p>
 
-          <p className="mt-1 text-xs text-emerald-400">
-            Authenticated account
-          </p>
+          <p className="mt-1 text-xs text-emerald-400">Authenticated account</p>
         </div>
 
         {!editing && (

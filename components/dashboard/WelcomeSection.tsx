@@ -3,18 +3,11 @@ type WelcomeSectionProps = {
   email: string;
 };
 
-export default function WelcomeSection({
-  name,
-  email,
-}: WelcomeSectionProps) {
+export default function WelcomeSection({ name, email }: WelcomeSectionProps) {
   const hour = new Date().getHours();
 
   const greeting =
-    hour < 12
-      ? "Good morning"
-      : hour < 18
-        ? "Good afternoon"
-        : "Good evening";
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const firstName = name.trim().split(/\s+/)[0] || "Detective";
 
@@ -31,12 +24,11 @@ export default function WelcomeSection({
         </h1>
 
         <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-400 sm:text-base">
-          Welcome to Codebase Detective. Your workspace is ready.
-          Investigate repositories, explore code relationships,
-          uncover issues and understand how your codebase works.
+          Welcome to Codebase Detective. Your workspace is ready. Investigate
+          repositories, explore code relationships, uncover issues and
+          understand how your codebase works.
         </p>
       </div>
-
 
       {/* Getting started card */}
       <div className="relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-stone-900 to-stone-900 p-5 sm:p-6">
@@ -50,13 +42,13 @@ export default function WelcomeSection({
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-stone-400">
-            Connect a GitHub repository to begin exploring its
-            structure, dependencies and potential issues.
+            Connect a GitHub repository to begin exploring its structure,
+            dependencies and potential issues.
           </p>
 
           <div className="mt-5 flex items-center gap-2 text-xs text-stone-500">
             <span className="h-2 w-2 rounded-full bg-orange-400" />
-           Add a repository to start your investigation.
+            Add a repository to start your investigation.
           </div>
         </div>
 

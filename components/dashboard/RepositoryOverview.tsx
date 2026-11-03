@@ -1,149 +1,90 @@
+import RepositoryRetryButton from "@/components/dashboard/RepositoryRetryButton";
 
 export type Repository = {
   id: string;
   name: string;
   owner: string;
   description: string | null;
+  htmlUrl: string;
   visibility: "public" | "private";
   defaultBranch: string | null;
   updatedAt: string | null;
   analysisStatus:
-    | "not_started"
-    | "queued"
-    | "processing"
-    | "completed"
-    | "failed";
+    "not_started" | "queued" | "processing" | "completed" | "failed";
+
+  latestJob: {
+    id: string;
+    status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+    attempts: number;
+    maxAttempts: number;
+    errorCode: string | null;
+    errorMessage: string | null;
+    nextRetryAt: string | null;
+    retryAvailable: boolean;
+  } | null;
 };
 
 type RepositoryOverviewProps = {
-  repositories: Repository[] | null;
+  repositories: Repository[];
 };
 
-function formatDate(date: string | null) {
-  if (!date) return "Not available";
-
-  const parsedDate = new Date(date);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return "Not available";
-  }
+function formatDate(value: string | null) {
+  if (!value) return "Not available";
 
   return new Intl.DateTimeFormat("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(parsedDate);
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
-function getStatus(status: Repository["analysisStatus"]) {
+function getStatusLabel(status: Repository["analysisStatus"]) {
   switch (status) {
     case "queued":
-      return {
-        label: "Queued",
-        style: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-      };
-
+      return "Queued";
     case "processing":
-      return {
-        label: "Processing",
-        style: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-      };
-
+      return "Processing";
     case "completed":
-      return {
-        label: "Completed",
-        style: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-      };
-
+      return "Indexed";
     case "failed":
-      return {
-        label: "Failed",
-        style: "bg-red-500/10 text-red-400 border-red-500/20",
-      };
-
+      return "Failed";
     default:
-      return {
-        label: "Not analysed",
-        style: "bg-stone-500/10 text-stone-400 border-stone-500/20",
-      };
+      return "Not started";
   }
 }
 
 export default function RepositoryOverview({
   repositories,
 }: RepositoryOverviewProps) {
-  const isLoading = repositories === null;
-  const hasRepositories =
-    repositories !== null && repositories.length > 0;
-
   return (
     <section aria-labelledby="repository-overview-heading">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2
-            id="repository-overview-heading"
-            className="text-lg font-semibold text-stone-100"
-          >
-            Your repositories
-          </h2>
+      <div className="mb-5">
+        <h2
+          id="repository-overview-heading"
+          className="text-lg font-semibold text-stone-100"
+        >
+          Your repositories
+        </h2>
 
-          <p className="mt-1 text-sm text-stone-400">
-            GitHub repositories connected to your workspace.
-          </p>
-        </div>
-
-        <span className="rounded-full border border-stone-700 bg-stone-900 px-3 py-1 text-xs text-stone-400">
-          {isLoading
-            ? "Loading"
-            : `${repositories.length} connected`}
-        </span>
+        <p className="mt-1 text-sm text-stone-400">
+          GitHub repositories connected to your workspace.
+        </p>
       </div>
 
-      {isLoading ? (
-        <div
-          className="rounded-2xl border border-stone-800 bg-stone-900/60 p-8 text-center"
-          aria-live="polite"
-        >
-          <p className="text-sm text-stone-400">
-            Repository data is not connected yet.
-          </p>
-        </div>
-      ) : !hasRepositories ? (
-        <div className="rounded-2xl border border-dashed border-stone-700 bg-stone-900/40 px-6 py-12 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-stone-700 bg-stone-900">
-            <svg
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="h-7 w-7 text-stone-400"
-              aria-hidden="true"
-            >
-              <path
-                fillRule="evenodd"
-                d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.69c-2.78.6-3.37-1.18-3.37-1.18-.45-1.15-1.11-1.45-1.11-1.45-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.82.09-.65.35-1.08.63-1.33-2.22-.25-4.56-1.11-4.56-4.95 0-1.09.39-1.99 1.03-2.69-.1-.25-.45-1.28.1-2.66 0 0 .84-.27 2.75 1.03A9.57 9.57 0 0 1 12 6.98a9.6 9.6 0 0 1 2.5.34c1.91-1.3 2.75-1.03 2.75-1.03.55 1.38.2 2.41.1 2.66.64.7 1.03 1.6 1.03 2.69 0 3.85-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.59c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-
-          <h3 className="mt-5 text-lg font-semibold text-stone-100">
+      {repositories.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-stone-700 bg-stone-900/40 p-8 text-center">
+          <h3 className="text-base font-semibold text-stone-200">
             No repositories yet
           </h3>
 
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-400">
-            Your investigations will appear here once you connect
-            a GitHub repository. Start with a repository you own
-            or one you have permission to access.
+          <p className="mt-2 text-sm text-stone-400">
+            Add your first public GitHub repository above to start your
+            investigation.
           </p>
-
-          <div className="mx-auto mt-5 inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-xs font-medium text-orange-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
-            Repository submission is coming in Sprint 01.5
-          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {repositories.map((repository) => {
-            const status = getStatus(repository.analysisStatus);
+            const job = repository.latestJob;
 
             return (
               <article
@@ -152,43 +93,97 @@ export default function RepositoryOverview({
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="truncate font-semibold text-stone-100">
-                      {repository.name}
-                    </h3>
-
-                    <p className="mt-1 truncate text-xs text-stone-500">
+                    <a
+                      href={repository.htmlUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-stone-100 transition-colors hover:text-orange-400"
+                    >
                       {repository.owner}/{repository.name}
+                    </a>
+
+                    <p className="mt-1 text-xs text-stone-500">
+                      {repository.visibility} repository
+                      {repository.defaultBranch
+                        ? ` · ${repository.defaultBranch}`
+                        : ""}
                     </p>
                   </div>
 
                   <span
-                    className={`rounded-full border px-2.5 py-1 text-xs ${status.style}`}
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      repository.analysisStatus === "completed"
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : repository.analysisStatus === "failed"
+                          ? "bg-red-500/10 text-red-400"
+                          : repository.analysisStatus === "processing"
+                            ? "bg-blue-500/10 text-blue-400"
+                            : "bg-stone-800 text-stone-300"
+                    }`}
                   >
-                    {status.label}
+                    {getStatusLabel(repository.analysisStatus)}
                   </span>
                 </div>
 
                 {repository.description && (
-                  <p className="mt-4 line-clamp-2 text-sm text-stone-400">
+                  <p className="mt-4 text-sm text-stone-400">
                     {repository.description}
                   </p>
                 )}
 
-                <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-stone-800 pt-4 text-xs text-stone-500">
-                  <span>
-                    {repository.visibility === "public"
-                      ? "Public"
-                      : "Private"}
-                  </span>
+                <div className="mt-5 border-t border-stone-800 pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-medium text-stone-400">
+                      Indexing job
+                    </span>
 
-                  <span>
-                    Branch: {repository.defaultBranch ?? "Unknown"}
-                  </span>
+                    {job && (
+                      <span className="text-xs text-stone-500">
+                        Attempt {job.attempts} of {job.maxAttempts}
+                      </span>
+                    )}
+                  </div>
 
-                  <span>
-                    Updated: {formatDate(repository.updatedAt)}
-                  </span>
+                  <p className="mt-2 text-sm text-stone-300">
+                    {job
+                      ? job.status.toLowerCase()
+                      : "No indexing job recorded"}
+                  </p>
+
+                  {job?.status === "FAILED" && (
+                    <div className="mt-3 rounded-xl bg-red-500/5 p-3">
+                      <p className="text-xs text-red-400">
+                        {job.errorMessage || "Indexing failed."}
+                      </p>
+
+                      {job.attempts >= job.maxAttempts ? (
+                        <p className="mt-2 text-xs text-stone-500">
+                          Maximum retry attempts reached.
+                        </p>
+                      ) : job.nextRetryAt ? (
+                        <p className="mt-2 text-xs text-stone-500">
+                          Retry available: {formatDate(job.nextRetryAt)}
+                        </p>
+                      ) : null}
+
+                      {job.retryAvailable && (
+                        <div className="mt-3">
+                          <RepositoryRetryButton jobId={job.id} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {job?.status === "COMPLETED" && (
+                    <p className="mt-2 text-xs text-emerald-400">
+                      Repository metadata indexing completed.
+                    </p>
+                  )}
                 </div>
+
+                <p className="mt-4 text-xs text-stone-500">
+                  Last updated: {formatDate(repository.updatedAt)}
+                </p>
               </article>
             );
           })}

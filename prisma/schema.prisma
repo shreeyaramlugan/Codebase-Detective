@@ -77,6 +77,7 @@ model Repository {
   @@index([ownerId, status])
 }
 
+
 model IndexingJob {
   id String @id @default(cuid())
 
@@ -96,12 +97,17 @@ model IndexingJob {
   completedAt DateTime?
   nextRetryAt DateTime?
 
+  // Reserved for future worker claiming and recovery.
+  lockedAt DateTime?
+  lockedBy String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([repositoryId])
   @@index([repositoryId, status])
   @@index([status, createdAt])
+  @@index([status, nextRetryAt])
   @@map("indexing_job")
 }
 

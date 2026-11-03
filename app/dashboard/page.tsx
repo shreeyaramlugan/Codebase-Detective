@@ -1,4 +1,3 @@
-
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
@@ -21,46 +20,95 @@ async function DashboardContent() {
     where: {
       ownerId: session.user.id,
     },
+    include: {
+      indexingJobs: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
   });
 
-  const repositories = databaseRepositories.map((repository) => ({
-    id: repository.id,
-    name: repository.name,
-    owner: repository.ownerLogin,
-    description: repository.description,
-    visibility:
-      repository.visibility.toLowerCase() === "public"
-        ? ("public" as const)
-        : ("private" as const),
-    defaultBranch: repository.defaultBranch,
-    updatedAt: repository.updatedAt.toISOString(),
-    analysisStatus: (() => {
-      switch (repository.status) {
-        case "QUEUED":
-          return "queued" as const;
-        case "INDEXING":
-          return "processing" as const;
-        case "INDEXED":
-          return "completed" as const;
-        case "FAILED":
-          return "failed" as const;
-        case "SUBMITTED":
-        default:
-          return "not_started" as const;
-      }
-    })(),
-  }));
+  const now = new Date();
+
+  const repositories = databaseRepositories.map((repository) => {
+    const latestJob = repository.indexingJobs[0] ?? null;
+
+    let analysisStatus:
+      "not_started" | "queued" | "processing" | "completed" | "failed";
+
+    switch (repository.status) {
+      case "QUEUED":
+        analysisStatus = "queued";
+        break;
+      case "INDEXING":
+        analysisStatus = "processing";
+        break;
+      case "INDEXED":
+        analysisStatus = "completed";
+        break;
+      case "FAILED":
+        analysisStatus = "failed";
+        break;
+      case "SUBMITTED":
+      default:
+        analysisStatus = "not_started";
+    }
+
+    const retryAvailable =
+      latestJob?.status === "FAILED" &&
+      latestJob.attempts < latestJob.maxAttempts &&
+      (!latestJob.nextRetryAt || latestJob.nextRetryAt <= now);
+
+    return {
+      id: repository.id,
+      name: repository.name,
+      owner: repository.ownerLogin,
+      description: repository.description,
+      htmlUrl: repository.htmlUrl,
+      visibility:
+        repository.visibility.toLowerCase() === "public"
+          ? ("public" as const)
+          : ("private" as const),
+      defaultBranch: repository.defaultBranch,
+      updatedAt: repository.updatedAt.toISOString(),
+      analysisStatus,
+      latestJob: latestJob
+        ? {
+            id: latestJob.id,
+            status: latestJob.status,
+            attempts: latestJob.attempts,
+            maxAttempts: latestJob.maxAttempts,
+            errorCode: latestJob.errorCode,
+            errorMessage: latestJob.errorMessage,
+            nextRetryAt: latestJob.nextRetryAt?.toISOString() ?? null,
+            retryAvailable,
+          }
+        : null,
+    };
+  });
+
+  const activeJobs = repositories.filter(
+    (repository) =>
+      repository.latestJob?.status === "PENDING" ||
+      repository.latestJob?.status === "PROCESSING",
+  ).length;
+
+  const completedAnalyses = repositories.filter(
+    (repository) => repository.analysisStatus === "completed",
+  ).length;
 
   return (
     <div className="space-y-10">
       <OverviewStats
         repositories={repositories.length}
-        analyses={null}
+        analyses={completedAnalyses}
         findings={null}
-        activeJobs={null}
+        activeJobs={activeJobs}
       />
 
       <RepositorySubmission />
@@ -74,7 +122,7 @@ async function DashboardContent() {
 
 function DashboardLoading() {
   return (
-    <div className="space-y-10 animate-pulse">
+    <div className="animate-pulse space-y-10">
       <div className="h-24 rounded-2xl bg-stone-900" />
       <div className="h-40 rounded-2xl bg-stone-900" />
       <div className="h-64 rounded-2xl bg-stone-900" />

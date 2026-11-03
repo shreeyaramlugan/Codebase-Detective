@@ -43,10 +43,7 @@ async function githubFetch<T>(path: string): Promise<T> {
       cache: "no-store",
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === "TimeoutError"
-    ) {
+    if (error instanceof Error && error.name === "TimeoutError") {
       throw new GitHubApiError(
         "GitHub took too long to respond. Please try again.",
         "TIMEOUT",
@@ -68,10 +65,7 @@ async function githubFetch<T>(path: string): Promise<T> {
     const reset = response.headers.get("x-ratelimit-reset");
     const retryAfter = response.headers.get("retry-after");
 
-    if (
-      response.status === 403 &&
-      (remaining === "0" || retryAfter !== null)
-    ) {
+    if (response.status === 403 && (remaining === "0" || retryAfter !== null)) {
       let retryAfterSeconds: number | undefined;
 
       if (retryAfter) {
@@ -221,10 +215,7 @@ export async function getLatestCommitSha(
     return sha;
   } catch (error) {
     // GitHub returns 409 when a repository has no commits.
-    if (
-      error instanceof GitHubApiError &&
-      error.status === 409
-    ) {
+    if (error instanceof GitHubApiError && error.status === 409) {
       return null;
     }
 
@@ -239,8 +230,7 @@ export async function fetchGitHubRepositoryMetadata(
   const repository = await getGitHubRepository(owner, name);
 
   const isPublic =
-    repository.private === false &&
-    repository.visibility === "public";
+    repository.private === false && repository.visibility === "public";
 
   if (!isPublic) {
     throw new GitHubApiError(

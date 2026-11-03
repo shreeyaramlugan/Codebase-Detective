@@ -1,4 +1,3 @@
-
 type OverviewStatsProps = {
   repositories: number | null;
   analyses: number | null;
@@ -86,9 +85,7 @@ export default function OverviewStats({
               <div className="mt-5">
                 <p
                   className={`text-3xl font-semibold tracking-tight ${
-                    value === null
-                      ? "text-stone-600"
-                      : "text-stone-100"
+                    value === null ? "text-stone-600" : "text-stone-100"
                   }`}
                   aria-label={
                     value === null
@@ -96,9 +93,7 @@ export default function OverviewStats({
                       : `${value} ${stat.label.toLowerCase()}`
                   }
                 >
-                  {value === null
-                    ? "—"
-                    : value.toLocaleString("en-ZA")}
+                  {value === null ? "—" : value.toLocaleString("en-ZA")}
                 </p>
 
                 <p className="mt-2 text-xs text-stone-500">

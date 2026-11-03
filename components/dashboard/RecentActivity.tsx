@@ -1,4 +1,3 @@
-
 export type ActivityType =
   | "repository_connected"
   | "analysis_started"
@@ -65,9 +64,7 @@ function formatActivityDate(date: string) {
   }).format(parsedDate);
 }
 
-export default function RecentActivity({
-  activities,
-}: RecentActivityProps) {
+export default function RecentActivity({ activities }: RecentActivityProps) {
   const isLoading = activities === null;
 
   const sortedActivities =
@@ -76,8 +73,7 @@ export default function RecentActivity({
       : [...activities]
           .sort(
             (a, b) =>
-              new Date(b.createdAt).getTime() -
-              new Date(a.createdAt).getTime(),
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
           )
           .slice(0, 8);
 
@@ -104,16 +100,16 @@ export default function RecentActivity({
         ) : sortedActivities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-stone-700 bg-stone-800 text-stone-400">
-              <span className="text-xl" aria-hidden="true">◷</span>
+              <span className="text-xl" aria-hidden="true">
+                ◷
+              </span>
             </div>
 
-            <h3 className="mt-4 font-medium text-stone-200">
-              No activity yet
-            </h3>
+            <h3 className="mt-4 font-medium text-stone-200">No activity yet</h3>
 
             <p className="mt-2 max-w-sm text-sm leading-6 text-stone-500">
-              Your repository submissions, analysis runs and
-              investigation updates will appear here.
+              Your repository submissions, analysis runs and investigation
+              updates will appear here.
             </p>
           </div>
         ) : (

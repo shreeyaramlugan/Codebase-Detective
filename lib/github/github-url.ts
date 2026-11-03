@@ -42,10 +42,7 @@ export function parseGitHubRepositoryUrl(
   try {
     url = new URL(trimmedInput);
   } catch {
-    throw new GitHubUrlError(
-      "Please enter a valid URL.",
-      "INVALID_URL",
-    );
+    throw new GitHubUrlError("Please enter a valid URL.", "INVALID_URL");
   }
 
   // Only accept HTTPS GitHub URLs.
@@ -76,9 +73,7 @@ export function parseGitHubRepositoryUrl(
     );
   }
 
-  const segments = url.pathname
-    .split("/")
-    .filter(Boolean);
+  const segments = url.pathname.split("/").filter(Boolean);
 
   if (segments.length < 2) {
     throw new GitHubUrlError(

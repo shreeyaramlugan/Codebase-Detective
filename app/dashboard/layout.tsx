@@ -5,11 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 
-async function DashboardAuthBoundary({
-  children,
-}: {
-  children: ReactNode;
-}) {
+async function DashboardAuthBoundary({ children }: { children: ReactNode }) {
   const session = await getCurrentSession();
 
   if (!session) {
@@ -28,11 +24,7 @@ async function DashboardAuthBoundary({
   );
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <Suspense
       fallback={

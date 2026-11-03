@@ -113,14 +113,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. Validate the URL and retrieve authoritative GitHub metadata.
+    // 3. Validate URL and retrieve authoritative GitHub metadata.
     const { metadata } = await validateGitHubRepository(body.url.trim());
 
     // 4. Check for an existing repository belonging to this user.
+    // Check both GitHub ID and full name.
     const existingRepository = await prisma.repository.findFirst({
       where: {
         ownerId: session.user.id,
-        fullName: metadata.fullName,
+        OR: [{ fullName: metadata.fullName }, { githubId: metadata.githubId }],
       },
     });
 
@@ -131,31 +132,50 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Create the repository using verified GitHub metadata.
-    const repository = await prisma.repository.create({
-      data: {
-        ownerId: session.user.id,
-        provider: "github",
-        githubId: metadata.githubId,
-        ownerLogin: metadata.owner,
-        name: metadata.name,
-        fullName: metadata.fullName,
-        htmlUrl: metadata.htmlUrl,
-        description: metadata.description,
-        visibility: "PUBLIC",
-        defaultBranch: metadata.defaultBranch,
-        language: metadata.language,
-        stars: metadata.stars,
-        forks: metadata.forks,
-        lastCommitSha: metadata.lastCommitSha,
-      },
+    // 5. Atomically create the repository and its indexing job.
+    const result = await prisma.$transaction(async (tx) => {
+      const repository = await tx.repository.create({
+        data: {
+          ownerId: session.user.id,
+          provider: "github",
+          githubId: metadata.githubId,
+          ownerLogin: metadata.owner,
+          name: metadata.name,
+          fullName: metadata.fullName,
+          htmlUrl: metadata.htmlUrl,
+          description: metadata.description,
+          visibility: "PUBLIC",
+          defaultBranch: metadata.defaultBranch,
+          language: metadata.language,
+          stars: metadata.stars,
+          forks: metadata.forks,
+          lastCommitSha: metadata.lastCommitSha,
+          status: "QUEUED",
+        },
+      });
+
+      const indexingJob = await tx.indexingJob.create({
+        data: {
+          repositoryId: repository.id,
+          type: "REPOSITORY_INDEX",
+          status: "PENDING",
+        },
+      });
+
+      return {
+        repository,
+        indexingJob,
+      };
     });
 
     // 6. Convert BigInt before JSON serialization.
     return NextResponse.json(
       {
-        ...repository,
-        githubId: repository.githubId?.toString() ?? null,
+        repository: {
+          ...result.repository,
+          githubId: result.repository.githubId?.toString() ?? null,
+        },
+        indexingJob: result.indexingJob,
       },
       { status: 201 },
     );
@@ -198,7 +218,7 @@ export async function POST(request: Request) {
     }
 
     // Unexpected database or application errors.
-    console.error("Repository creation failed:", error);
+    console.error("Repository and indexing job creation failed:", error);
 
     return NextResponse.json(
       { error: "An unexpected server error occurred." },

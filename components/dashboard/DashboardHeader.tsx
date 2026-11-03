@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -67,10 +66,7 @@ export default function DashboardHeader({
               className="h-5 w-5"
               aria-hidden="true"
             >
-              <path
-                d="M4 6h16M4 12h16M4 18h16"
-                strokeLinecap="round"
-              />
+              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
             </svg>
           </button>
 
@@ -85,9 +81,7 @@ export default function DashboardHeader({
         <div className="flex items-center gap-3">
           <div className="hidden text-right sm:block">
             <p className="text-sm font-medium text-stone-200">{name}</p>
-            <p className="max-w-48 truncate text-xs text-stone-500">
-              {email}
-            </p>
+            <p className="max-w-48 truncate text-xs text-stone-500">{email}</p>
           </div>
 
           <div

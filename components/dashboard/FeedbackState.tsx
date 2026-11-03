@@ -1,4 +1,3 @@
-
 type FeedbackStateProps = {
   type: "loading" | "error" | "success" | "info";
   title: string;
@@ -52,13 +51,9 @@ export default function FeedbackState({
       </div>
 
       <div className="min-w-0">
-        <h3 className="text-sm font-semibold text-stone-100">
-          {title}
-        </h3>
+        <h3 className="text-sm font-semibold text-stone-100">{title}</h3>
 
-        <p className="mt-1 text-sm leading-5 text-stone-400">
-          {message}
-        </p>
+        <p className="mt-1 text-sm leading-5 text-stone-400">{message}</p>
       </div>
     </div>
   );

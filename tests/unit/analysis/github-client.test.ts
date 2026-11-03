@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  fetchGitHubRepositoryMetadata,
-} from "../../../lib/github/github.client";
+import { fetchGitHubRepositoryMetadata } from "../../../lib/github/github.client";
 
 import { GitHubApiError } from "../../../lib/github/github.errors";
 
@@ -37,18 +35,12 @@ describe("fetchGitHubRepositoryMetadata", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([
-            { sha: "a".repeat(40) },
-          ]),
-          { status: 200 },
-        ),
+        new Response(JSON.stringify([{ sha: "a".repeat(40) }]), {
+          status: 200,
+        }),
       );
 
-    const result = await fetchGitHubRepositoryMetadata(
-      "facebook",
-      "react",
-    );
+    const result = await fetchGitHubRepositoryMetadata("facebook", "react");
 
     expect(result).toEqual({
       githubId: BigInt(10270250),
@@ -106,9 +98,7 @@ describe("fetchGitHubRepositoryMetadata", () => {
         status: 403,
         headers: {
           "x-ratelimit-remaining": "0",
-          "x-ratelimit-reset": String(
-            Math.floor(Date.now() / 1000) + 60,
-          ),
+          "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 60),
         },
       }),
     );
@@ -147,10 +137,7 @@ describe("fetchGitHubRepositoryMetadata", () => {
         }),
       );
 
-    const result = await fetchGitHubRepositoryMetadata(
-      "facebook",
-      "react",
-    );
+    const result = await fetchGitHubRepositoryMetadata("facebook", "react");
 
     expect(result.lastCommitSha).toBeNull();
   });
