@@ -159,6 +159,7 @@ export async function POST(request: Request) {
           repositoryId: repository.id,
           type: "REPOSITORY_INDEX",
           status: "PENDING",
+          targetCommitSha: metadata.lastCommitSha,
         },
       });
 

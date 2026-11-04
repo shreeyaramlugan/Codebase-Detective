@@ -12,6 +12,7 @@ enum RepositoryStatus {
   QUEUED
   INDEXING
   INDEXED
+  PARTIALLY_INDEXED
   FAILED
 }
 
@@ -24,6 +25,34 @@ enum IndexingJobStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum SnapshotProcessingStatus {
+  PENDING
+  DISCOVERING
+  INGESTING
+  COMPLETED
+  FAILED
+}
+
+enum SnapshotCompleteness {
+  COMPLETE
+  PARTIAL
+  FAILED
+}
+
+enum SnapshotFileStatus {
+  DISCOVERED
+  ELIGIBLE
+  STORED
+  SKIPPED
+  FAILED
+}
+
+enum SnapshotFileCategory {
+  SOURCE
+  CONFIGURATION
+  DOCUMENTATION
 }
 
 model User {
@@ -70,6 +99,7 @@ model Repository {
   updatedAt DateTime @updatedAt
 
   indexingJobs IndexingJob[]
+  snapshots    RepositorySnapshot[]
 
   @@unique([ownerId, fullName])
   @@unique([ownerId, githubId])
@@ -77,15 +107,15 @@ model Repository {
   @@index([ownerId, status])
 }
 
-
 model IndexingJob {
   id String @id @default(cuid())
 
   repositoryId String
   repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
-  type   IndexingJobType   @default(REPOSITORY_INDEX)
-  status IndexingJobStatus @default(PENDING)
+  type            IndexingJobType   @default(REPOSITORY_INDEX)
+  status          IndexingJobStatus @default(PENDING)
+  targetCommitSha String?
 
   attempts    Int @default(0)
   maxAttempts Int @default(3)
@@ -157,4 +187,65 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model RepositorySnapshot {
+  id           String     @id @default(cuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  commitSha     String
+  treeSha       String
+  branchName    String?
+  commitMessage String?
+  commitAuthor  String?
+  committedAt   DateTime?
+
+  status       SnapshotProcessingStatus @default(PENDING)
+  completeness SnapshotCompleteness?
+
+  totalFiles    Int    @default(0)
+  eligibleFiles Int    @default(0)
+  storedFiles   Int    @default(0)
+  skippedFiles  Int    @default(0)
+  failedFiles   Int    @default(0)
+  totalBytes    BigInt @default(0)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files SnapshotFile[]
+
+  @@unique([repositoryId, commitSha])
+  @@index([repositoryId, createdAt])
+  @@index([status])
+}
+
+model SnapshotFile {
+  id         String             @id @default(cuid())
+  snapshotId String
+  snapshot   RepositorySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  path      String
+  name      String
+  extension String?
+  category  SnapshotFileCategory?
+
+  gitBlobSha  String?
+  contentHash String?
+  sizeBytes   BigInt?
+  storageKey  String?
+
+  status      SnapshotFileStatus @default(DISCOVERED)
+  skipReason  String?
+  failureCode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([snapshotId, path])
+  @@index([snapshotId, status])
 }

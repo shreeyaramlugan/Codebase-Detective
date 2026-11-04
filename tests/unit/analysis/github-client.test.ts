@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchGitHubRepositoryMetadata } from "../../../lib/github/github.client";
-
+import {
+  fetchGitHubRepositoryMetadata,
+  getGitHubRepositoryTree,
+} from "../../../lib/github/github.client";
 import { GitHubApiError } from "../../../lib/github/github.errors";
 
 const mockRepository = {
@@ -140,5 +142,298 @@ describe("fetchGitHubRepositoryMetadata", () => {
     const result = await fetchGitHubRepositoryMetadata("facebook", "react");
 
     expect(result.lastCommitSha).toBeNull();
+  });
+});
+const TEST_COMMIT_SHA = "a".repeat(40);
+const TEST_ROOT_TREE_SHA = "b".repeat(40);
+const TEST_SOURCE_TREE_SHA = "c".repeat(40);
+
+function mockCommitResponse() {
+  return {
+    sha: TEST_COMMIT_SHA,
+    commit: {
+      message: "Test repository commit",
+      author: {
+        name: "Test Author",
+        date: "2026-11-03T10:00:00Z",
+      },
+      tree: {
+        sha: TEST_ROOT_TREE_SHA,
+      },
+    },
+  };
+}
+
+function mockTreeResponse(
+  sha: string,
+  tree: Array<{
+    path: string;
+    mode: string;
+    type: string;
+    sha: string;
+    size?: number;
+  }>,
+  truncated = false,
+) {
+  return {
+    sha,
+    tree,
+    truncated,
+  };
+}
+
+describe("getGitHubRepositoryTree", () => {
+  it("retrieves a complete recursive repository tree", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mockCommitResponse()), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_ROOT_TREE_SHA, [
+              {
+                path: "src/index.ts",
+                mode: "100644",
+                type: "blob",
+                sha: "d".repeat(40),
+                size: 120,
+              },
+              {
+                path: "README.md",
+                mode: "100644",
+                type: "blob",
+                sha: "e".repeat(40),
+                size: 80,
+              },
+            ]),
+          ),
+          { status: 200 },
+        ),
+      );
+
+    const result = await getGitHubRepositoryTree(
+      "owner",
+      "repo",
+      "main",
+    );
+
+    expect(result.commitSha).toBe(TEST_COMMIT_SHA);
+    expect(result.rootTreeSha).toBe(TEST_ROOT_TREE_SHA);
+    expect(result.recoveredFromTruncation).toBe(false);
+
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries.map((entry) => entry.path)).toEqual([
+      "src/index.ts",
+      "README.md",
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      `${TEST_ROOT_TREE_SHA}?recursive=1`,
+    );
+  });
+
+  it("recovers a truncated recursive tree using individual subtrees", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mockCommitResponse()), {
+          status: 200,
+        }),
+      )
+      // Initial recursive request is truncated.
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(
+              TEST_ROOT_TREE_SHA,
+              [
+                {
+                  path: "src/index.ts",
+                  mode: "100644",
+                  type: "blob",
+                  sha: "d".repeat(40),
+                  size: 120,
+                },
+              ],
+              true,
+            ),
+          ),
+          { status: 200 },
+        ),
+      )
+      // Root tree retrieved without recursion.
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_ROOT_TREE_SHA, [
+              {
+                path: "src",
+                mode: "040000",
+                type: "tree",
+                sha: TEST_SOURCE_TREE_SHA,
+              },
+              {
+                path: "README.md",
+                mode: "100644",
+                type: "blob",
+                sha: "e".repeat(40),
+                size: 80,
+              },
+            ]),
+          ),
+          { status: 200 },
+        ),
+      )
+      // Nested src tree retrieved separately.
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_SOURCE_TREE_SHA, [
+              {
+                path: "index.ts",
+                mode: "100644",
+                type: "blob",
+                sha: "d".repeat(40),
+                size: 120,
+              },
+            ]),
+          ),
+          { status: 200 },
+        ),
+      );
+
+    const result = await getGitHubRepositoryTree(
+      "owner",
+      "repo",
+      "main",
+    );
+
+    expect(result.recoveredFromTruncation).toBe(true);
+
+    expect(result.entries.map((entry) => entry.path).sort()).toEqual([
+      "README.md",
+      "src",
+      "src/index.ts",
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("fails safely when a subtree is also truncated", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mockCommitResponse()), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_ROOT_TREE_SHA, [], true),
+          ),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_ROOT_TREE_SHA, [
+              {
+                path: "src",
+                mode: "040000",
+                type: "tree",
+                sha: TEST_SOURCE_TREE_SHA,
+              },
+            ]),
+          ),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_SOURCE_TREE_SHA, [], true),
+          ),
+          { status: 200 },
+        ),
+      );
+
+    await expect(
+      getGitHubRepositoryTree("owner", "repo", "main"),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      retryable: false,
+    });
+  });
+
+  it("rejects duplicate paths in a recursive tree", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mockCommitResponse()), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_ROOT_TREE_SHA, [
+              {
+                path: "README.md",
+                mode: "100644",
+                type: "blob",
+                sha: "d".repeat(40),
+              },
+              {
+                path: "README.md",
+                mode: "100644",
+                type: "blob",
+                sha: "e".repeat(40),
+              },
+            ]),
+          ),
+          { status: 200 },
+        ),
+      );
+
+    await expect(
+      getGitHubRepositoryTree("owner", "repo", "main"),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+
+  it("rejects unsafe paths returned by GitHub", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(mockCommitResponse()), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            mockTreeResponse(TEST_ROOT_TREE_SHA, [
+              {
+                path: "../outside.txt",
+                mode: "100644",
+                type: "blob",
+                sha: "d".repeat(40),
+              },
+            ]),
+          ),
+          { status: 200 },
+        ),
+      );
+
+    await expect(
+      getGitHubRepositoryTree("owner", "repo", "main"),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
   });
 });

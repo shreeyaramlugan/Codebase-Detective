@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# Codebase Detective source snapshots and local ingestion storage
+/storage/
+
+# Allow the safe example environment template
+!.env.example

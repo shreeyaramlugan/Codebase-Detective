@@ -1,6 +1,10 @@
 import { GitHubApiError } from "./github.errors";
 import type { GitHubRepositoryMetadata } from "./github.type";
-
+import type {
+  GitHubCommitReference,
+  GitHubRepositoryTree,
+  GitHubTreeEntry,
+} from "./github.type";
 const GITHUB_API = "https://api.github.com";
 
 const API_VERSION = "2022-11-28";
@@ -263,4 +267,349 @@ export async function fetchGitHubRepositoryMetadata(
     forks: repository.forks_count,
     lastCommitSha,
   };
+}
+interface GitHubApiCommitDetails {
+  sha: string;
+  commit: {
+    message: string;
+    author: {
+      name: string | null;
+      date: string | null;
+    } | null;
+    tree: {
+      sha: string;
+    };
+  };
+}
+
+interface GitHubApiTreeEntry {
+  path: string;
+  mode: string;
+  type: string;
+  sha: string;
+  size?: number;
+}
+
+interface GitHubApiTree {
+  sha: string;
+  tree: GitHubApiTreeEntry[];
+  truncated: boolean;
+}
+
+const SHA_REGEX = /^[a-f0-9]{40}$/i;
+
+const MAX_TREE_REQUESTS = 10_000;
+const MAX_TREE_ENTRIES = 100_000;
+
+function isValidSha(value: unknown): value is string {
+  return typeof value === "string" && SHA_REGEX.test(value);
+}
+
+function validateTreeEntry(
+  entry: GitHubApiTreeEntry,
+): GitHubTreeEntry {
+  if (
+    typeof entry.path !== "string" ||
+    entry.path.length === 0 ||
+    entry.path.startsWith("/") ||
+    entry.path.split("/").some((segment) => segment === "." || segment === "..") ||
+    typeof entry.mode !== "string" ||
+    !["blob", "tree", "commit"].includes(entry.type) ||
+    !isValidSha(entry.sha) ||
+    (entry.size !== undefined &&
+      (!Number.isSafeInteger(entry.size) || entry.size < 0))
+  ) {
+    throw new GitHubApiError(
+      "GitHub returned an invalid repository tree entry.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  return {
+    path: entry.path,
+    mode: entry.mode,
+    type: entry.type as GitHubTreeEntry["type"],
+    sha: entry.sha,
+    ...(entry.size !== undefined ? { size: entry.size } : {}),
+  };
+}
+
+function validateTreeResponse(
+  response: GitHubApiTree,
+  expectedSha: string,
+): GitHubTreeEntry[] {
+  if (
+    !response ||
+    !isValidSha(response.sha) ||
+    response.sha.toLowerCase() !== expectedSha.toLowerCase() ||
+    !Array.isArray(response.tree) ||
+    typeof response.truncated !== "boolean"
+  ) {
+    throw new GitHubApiError(
+      "GitHub returned an invalid repository tree response.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  return response.tree.map((entry) => validateTreeEntry(entry));
+}
+
+/**
+ * Resolves a branch, tag or commit reference to an immutable commit.
+ * All subsequent source retrieval must use the returned SHA values,
+ * never the original branch name.
+ */
+export async function resolveGitHubCommit(
+  owner: string,
+  name: string,
+  revision: string,
+): Promise<GitHubCommitReference> {
+  if (!revision.trim()) {
+    throw new GitHubApiError(
+      "A GitHub branch, tag or commit reference is required.",
+      "INVALID_RESPONSE",
+      400,
+      false,
+    );
+  }
+
+  const commit = await githubFetch<GitHubApiCommitDetails>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/commits/${encodeURIComponent(revision)}`,
+  );
+
+  if (
+    !commit ||
+    !isValidSha(commit.sha) ||
+    !commit.commit ||
+    !commit.commit.tree ||
+    !isValidSha(commit.commit.tree.sha) ||
+    typeof commit.commit.message !== "string"
+  ) {
+    throw new GitHubApiError(
+      "GitHub returned incomplete commit information.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  return {
+    sha: commit.sha,
+    treeSha: commit.commit.tree.sha,
+    message: commit.commit.message,
+    authorName:
+      typeof commit.commit.author?.name === "string"
+        ? commit.commit.author.name
+        : null,
+    committedAt:
+      typeof commit.commit.author?.date === "string"
+        ? commit.commit.author.date
+        : null,
+  };
+}
+
+/**
+ * Retrieves a Git tree by its immutable SHA.
+ *
+ * recursive=false is used during recovery so that each subtree
+ * can be retrieved independently.
+ */
+export async function getGitHubTree(
+  owner: string,
+  name: string,
+  treeSha: string,
+  recursive = false,
+): Promise<{
+  sha: string;
+  entries: GitHubTreeEntry[];
+  truncated: boolean;
+}> {
+  if (!isValidSha(treeSha)) {
+    throw new GitHubApiError(
+      "A valid Git tree SHA is required.",
+      "INVALID_RESPONSE",
+      400,
+      false,
+    );
+  }
+
+  const query = recursive ? "?recursive=1" : "";
+
+  const response = await githubFetch<GitHubApiTree>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/git/trees/${encodeURIComponent(treeSha)}${query}`,
+  );
+
+  const entries = validateTreeResponse(response, treeSha);
+
+  return {
+    sha: response.sha,
+    entries,
+    truncated: response.truncated,
+  };
+}
+
+/**
+ * Retrieves a complete repository inventory.
+ *
+ * First attempts GitHub's recursive tree endpoint.
+ * If GitHub truncates the result, it walks each subtree individually.
+ *
+ * If a complete inventory cannot be established within safety limits,
+ * this function throws instead of returning an incomplete inventory.
+ */
+export async function getGitHubRepositoryTree(
+  owner: string,
+  name: string,
+  revision: string,
+): Promise<GitHubRepositoryTree> {
+  const commit = await resolveGitHubCommit(owner, name, revision);
+
+  const recursiveTree = await getGitHubTree(
+    owner,
+    name,
+    commit.treeSha,
+    true,
+  );
+
+  if (!recursiveTree.truncated) {
+    if (recursiveTree.entries.length > MAX_TREE_ENTRIES) {
+      throw new GitHubApiError(
+        "The repository tree exceeds the supported inventory limit.",
+        "INVALID_RESPONSE",
+        200,
+        false,
+      );
+    }
+
+    assertUniqueTreePaths(recursiveTree.entries);
+
+    return {
+      commitSha: commit.sha,
+      rootTreeSha: commit.treeSha,
+      entries: recursiveTree.entries,
+      recoveredFromTruncation: false,
+    };
+  }
+
+  let requestCount = 0;
+  const entries: GitHubTreeEntry[] = [];
+  const paths = new Set<string>();
+
+  async function walkTree(
+    currentTreeSha: string,
+    prefix: string,
+    ancestors: Set<string>,
+  ): Promise<void> {
+    requestCount++;
+
+    if (requestCount > MAX_TREE_REQUESTS) {
+      throw new GitHubApiError(
+        "Repository tree recovery exceeded the request safety limit.",
+        "INVALID_RESPONSE",
+        200,
+        false,
+      );
+    }
+
+    const normalizedSha = currentTreeSha.toLowerCase();
+
+    if (ancestors.has(normalizedSha)) {
+      throw new GitHubApiError(
+        "GitHub returned a cyclic repository tree.",
+        "INVALID_RESPONSE",
+        200,
+        false,
+      );
+    }
+
+    const tree = await getGitHubTree(
+      owner,
+      name,
+      currentTreeSha,
+      false,
+    );
+
+    if (tree.truncated) {
+      throw new GitHubApiError(
+        "GitHub returned a truncated subtree. A complete inventory could not be established.",
+        "INVALID_RESPONSE",
+        200,
+        false,
+      );
+    }
+
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(normalizedSha);
+
+    for (const entry of tree.entries) {
+      const fullPath = prefix
+        ? `${prefix}/${entry.path}`
+        : entry.path;
+
+      if (paths.has(fullPath)) {
+        throw new GitHubApiError(
+          "GitHub returned duplicate paths in the repository tree.",
+          "INVALID_RESPONSE",
+          200,
+          false,
+        );
+      }
+
+      paths.add(fullPath);
+
+      const fullEntry: GitHubTreeEntry = {
+        ...entry,
+        path: fullPath,
+      };
+
+      entries.push(fullEntry);
+
+      if (entries.length > MAX_TREE_ENTRIES) {
+        throw new GitHubApiError(
+          "The repository tree exceeds the supported inventory limit.",
+          "INVALID_RESPONSE",
+          200,
+          false,
+        );
+      }
+
+      if (entry.type === "tree") {
+        await walkTree(
+          entry.sha,
+          fullPath,
+          nextAncestors,
+        );
+      }
+    }
+  }
+
+  await walkTree(commit.treeSha, "", new Set<string>());
+
+  return {
+    commitSha: commit.sha,
+    rootTreeSha: commit.treeSha,
+    entries,
+    recoveredFromTruncation: true,
+  };
+}
+
+function assertUniqueTreePaths(entries: GitHubTreeEntry[]): void {
+  const paths = new Set<string>();
+
+  for (const entry of entries) {
+    if (paths.has(entry.path)) {
+      throw new GitHubApiError(
+        "GitHub returned duplicate paths in the repository tree.",
+        "INVALID_RESPONSE",
+        200,
+        false,
+      );
+    }
+
+    paths.add(entry.path);
+  }
 }
