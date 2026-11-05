@@ -1,12 +1,8 @@
+// scripts/process-indexing-jobs.ts
 import "dotenv/config";
 
 import { prisma } from "../lib/db/prisma";
-import {
-  startIndexingJob,
-  completeIndexingJob,
-  failIndexingJob,
-} from "../lib/jobs/job-lifecycle";
-import { JobTransitionError } from "../lib/jobs/job-errors";
+import { processIndexingJob } from "../lib/jobs/ingestion-job-runner";
 
 const DEFAULT_BATCH_SIZE = 5;
 const MAX_BATCH_SIZE = 10;
@@ -29,35 +25,6 @@ function getBatchSize(): number {
   return value;
 }
 
-function validateRepositoryMetadata(repository: {
-  ownerLogin: string;
-  name: string;
-  fullName: string;
-  htmlUrl: string;
-}): boolean {
-  if (
-    !repository.ownerLogin.trim() ||
-    !repository.name.trim() ||
-    !repository.fullName.trim() ||
-    !repository.htmlUrl.trim()
-  ) {
-    return false;
-  }
-
-  try {
-    const url = new URL(repository.htmlUrl);
-
-    return (
-      url.protocol === "https:" &&
-      url.hostname === "github.com" &&
-      repository.fullName.toLowerCase() ===
-        `${repository.ownerLogin}/${repository.name}`.toLowerCase()
-    );
-  } catch {
-    return false;
-  }
-}
-
 async function processPendingJobs(): Promise<void> {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL === "1") {
     throw new Error(
@@ -69,7 +36,7 @@ async function processPendingJobs(): Promise<void> {
 
   console.log("Codebase Detective — Development Job Processor");
   console.log(`Batch size: ${batchSize}`);
-  console.log("Mode: metadata simulation only");
+  console.log("Mode: snapshot ingestion (GitHub Git Blobs API)");
   console.log("-----------------------------------------------");
 
   const pendingJobs = await prisma.indexingJob.findMany({
@@ -78,14 +45,9 @@ async function processPendingJobs(): Promise<void> {
       type: "REPOSITORY_INDEX",
       OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
     },
-    orderBy: {
-      createdAt: "asc",
-    },
+    orderBy: { createdAt: "asc" },
     take: batchSize,
-    select: {
-      id: true,
-      repositoryId: true,
-    },
+    select: { id: true },
   });
 
   if (pendingJobs.length === 0) {
@@ -95,123 +57,63 @@ async function processPendingJobs(): Promise<void> {
 
   console.log(`Found ${pendingJobs.length} pending job(s).`);
 
-  let completed = 0;
+  let ingested = 0;
+  let partial = 0;
   let failed = 0;
   let skipped = 0;
 
   for (const candidate of pendingJobs) {
-    let claimed = false;
-
     console.log(`\nProcessing job: ${candidate.id}`);
 
     try {
-      // Atomic claim: only one processor can start this job.
-      const job = await startIndexingJob(candidate.id);
-      claimed = true;
+      // Claiming is atomic, so concurrent processors cannot run the same job.
+      const outcome = await processIndexingJob(candidate.id);
 
-      const repository = await prisma.repository.findUnique({
-        where: {
-          id: job.repositoryId,
-        },
-        select: {
-          id: true,
-          ownerLogin: true,
-          name: true,
-          fullName: true,
-          htmlUrl: true,
-          visibility: true,
-          defaultBranch: true,
-        },
-      });
-
-      if (!repository || !validateRepositoryMetadata(repository)) {
-        await failIndexingJob(
-          job.id,
-          "INVALID_REPOSITORY_METADATA",
-          "Repository metadata is missing or invalid.",
-        );
-
-        failed++;
-        console.log("Result: failed — invalid repository metadata.");
-        continue;
-      }
-
-      // Sprint 01.6.4 simulation:
-      // We validate stored metadata only.
-      // No GitHub clone, source download or code execution occurs.
-      console.log(`Repository: ${repository.fullName}`);
-      console.log(`Visibility: ${repository.visibility}`);
-      console.log(
-        `Default branch: ${repository.defaultBranch ?? "Not provided"}`,
-      );
-
-      await completeIndexingJob(job.id);
-
-      completed++;
-      console.log("Result: completed — metadata simulation passed.");
-    } catch (error) {
-      if (!claimed) {
-        if (
-          error instanceof JobTransitionError &&
-          error.code === "INVALID_TRANSITION"
-        ) {
-          skipped++;
-          console.log(
-            "Result: skipped — job was claimed elsewhere or is unavailable.",
-          );
-          continue;
-        }
-
-        if (
-          error instanceof JobTransitionError &&
-          error.code === "MAX_ATTEMPTS_REACHED"
-        ) {
-          skipped++;
-          console.log("Result: skipped — maximum attempts reached.");
-          continue;
-        }
-
-        if (
-          error instanceof JobTransitionError &&
-          error.code === "JOB_NOT_FOUND"
-        ) {
-          skipped++;
-          console.log("Result: skipped — job no longer exists.");
-          continue;
-        }
-
-        console.error("Could not claim job:", candidate.id);
-        console.error(error instanceof Error ? error.message : "Unknown error");
+      if (outcome.kind === "SKIPPED") {
         skipped++;
+        console.log(`Result: skipped — ${outcome.reason}.`);
         continue;
       }
 
-      // Do not store raw exceptions, stack traces or secrets in the database.
-      try {
-        await failIndexingJob(
-          candidate.id,
-          "PROCESSING_ERROR",
-          "The development indexing simulation could not be completed.",
-        );
-
+      if (outcome.kind === "FAILED") {
         failed++;
-        console.log("Result: failed — processing error recorded.");
-      } catch (failureError) {
-        console.error("Could not record the job failure:", candidate.id);
-        console.error(
-          failureError instanceof Error
-            ? failureError.message
-            : "Unknown error",
-        );
+        console.log(`Result: failed — ${outcome.code}.`);
+        continue;
       }
+
+      const { result } = outcome;
+      const { summary } = result;
+
+      if (result.completeness === "PARTIAL") {
+        partial++;
+      } else {
+        ingested++;
+      }
+
+      console.log(
+        `Result: ${result.completeness} snapshot at ${result.commit.sha.slice(0, 7)}`,
+      );
+      console.log(
+        `Files — total ${summary.totalFiles}, stored ${summary.storedFiles}, ` +
+          `skipped ${summary.skippedFiles}, failed ${summary.failedFiles}, ` +
+          `bytes ${summary.totalBytes}`,
+      );
+    } catch (error) {
+      // Never print raw exceptions that could contain sensitive details.
+      failed++;
+      console.error(
+        "Job processing stopped unexpectedly:",
+        error instanceof Error ? error.name : "Unknown error",
+      );
     }
   }
 
   console.log("\n-----------------------------------------------");
   console.log("Processing summary");
-  console.log(`Completed: ${completed}`);
-  console.log(`Failed:    ${failed}`);
-  console.log(`Skipped:   ${skipped}`);
+  console.log(`Complete: ${ingested}`);
+  console.log(`Partial:  ${partial}`);
+  console.log(`Failed:   ${failed}`);
+  console.log(`Skipped:  ${skipped}`);
   console.log("-----------------------------------------------");
 }
 

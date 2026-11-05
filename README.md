@@ -496,7 +496,9 @@ Codebase Detective is being built around a simple principle:
 The goal is not simply to ask AI what a codebase does. It is to build a system that can investigate the underlying code, identify relationships and explain its conclusions with supporting evidence.
 
 Built with TypeScript, Next.js, PostgreSQL and a healthy amount of curiosity.
-##  Sprint Tracking
+
+## Sprint Tracking
+
 # Sprint 01 — Completion Record
 
 **Sprint:** 01 — Repository Registration and Indexing Job Management  
@@ -504,6 +506,7 @@ Built with TypeScript, Next.js, PostgreSQL and a healthy amount of curiosity.
 **Automated tests:** 190 passed across 18 test files
 
 ### Delivered
+
 - Email/password and GitHub OAuth authentication.
 - Protected dashboard access.
 - GitHub repository URL validation and metadata retrieval.
@@ -518,6 +521,7 @@ Built with TypeScript, Next.js, PostgreSQL and a healthy amount of curiosity.
 - Updated README and environment documentation.
 
 ### Verification
+
 - TypeScript: passed.
 - ESLint: zero errors; five non-blocking warnings.
 - Prisma schema validation: passed.
@@ -531,9 +535,20 @@ Built with TypeScript, Next.js, PostgreSQL and a healthy amount of curiosity.
 - GitHub OAuth login: manually verified.
 
 ### Known limitations
+
 The development processor validates repository metadata and simulates successful indexing. It does not yet download source code, parse files, construct dependency graphs or generate deterministic code findings.
 
 These capabilities remain assigned to subsequent sprints.
 
 ### Completion decision
+
 Sprint 01 acceptance checks are satisfied. The project is ready to proceed to Sprint 02, subject to the normal project-level review and version-control checkpoint.
+
+### Sprint 02 — GitHub Ingestion & Repository Snapshots
+
+**Status: Complete**
+
+Implemented commit-based GitHub repository ingestion, immutable
+repository snapshots, file classification, source storage,
+content integrity verification, snapshot completeness tracking,
+idempotent retries and owner-protected source retrieval.

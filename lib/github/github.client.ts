@@ -1,10 +1,14 @@
 import { GitHubApiError } from "./github.errors";
-import type { GitHubRepositoryMetadata } from "./github.type";
 import type {
+  GitHubBlob,
+  GitHubBlobContent,
   GitHubCommitReference,
+  GitHubRepositoryMetadata,
   GitHubRepositoryTree,
   GitHubTreeEntry,
 } from "./github.type";
+import { createHash } from "node:crypto";
+
 const GITHUB_API = "https://api.github.com";
 
 const API_VERSION = "2022-11-28";
@@ -305,14 +309,14 @@ function isValidSha(value: unknown): value is string {
   return typeof value === "string" && SHA_REGEX.test(value);
 }
 
-function validateTreeEntry(
-  entry: GitHubApiTreeEntry,
-): GitHubTreeEntry {
+function validateTreeEntry(entry: GitHubApiTreeEntry): GitHubTreeEntry {
   if (
     typeof entry.path !== "string" ||
     entry.path.length === 0 ||
     entry.path.startsWith("/") ||
-    entry.path.split("/").some((segment) => segment === "." || segment === "..") ||
+    entry.path
+      .split("/")
+      .some((segment) => segment === "." || segment === "..") ||
     typeof entry.mode !== "string" ||
     !["blob", "tree", "commit"].includes(entry.type) ||
     !isValidSha(entry.sha) ||
@@ -461,19 +465,35 @@ export async function getGitHubTree(
  * If a complete inventory cannot be established within safety limits,
  * this function throws instead of returning an incomplete inventory.
  */
-export async function getGitHubRepositoryTree(
+/**
+ * Retrieves a complete repository tree for an already-resolved commit.
+ *
+ * The supplied commit is immutable. This prevents branch movement
+ * between commit resolution and tree retrieval from mixing revisions.
+ *
+ * If GitHub truncates the recursive tree, the function walks each
+ * subtree individually and enforces the configured safety limits.
+ */
+export async function getGitHubRepositoryTreeForCommit(
   owner: string,
   name: string,
-  revision: string,
+  commit: GitHubCommitReference,
 ): Promise<GitHubRepositoryTree> {
-  const commit = await resolveGitHubCommit(owner, name, revision);
+  if (
+    !owner.trim() ||
+    !name.trim() ||
+    !isValidSha(commit.sha) ||
+    !isValidSha(commit.treeSha)
+  ) {
+    throw new GitHubApiError(
+      "Valid repository details and resolved commit metadata are required.",
+      "INVALID_RESPONSE",
+      400,
+      false,
+    );
+  }
 
-  const recursiveTree = await getGitHubTree(
-    owner,
-    name,
-    commit.treeSha,
-    true,
-  );
+  const recursiveTree = await getGitHubTree(owner, name, commit.treeSha, true);
 
   if (!recursiveTree.truncated) {
     if (recursiveTree.entries.length > MAX_TREE_ENTRIES) {
@@ -526,12 +546,7 @@ export async function getGitHubRepositoryTree(
       );
     }
 
-    const tree = await getGitHubTree(
-      owner,
-      name,
-      currentTreeSha,
-      false,
-    );
+    const tree = await getGitHubTree(owner, name, currentTreeSha, false);
 
     if (tree.truncated) {
       throw new GitHubApiError(
@@ -546,9 +561,7 @@ export async function getGitHubRepositoryTree(
     nextAncestors.add(normalizedSha);
 
     for (const entry of tree.entries) {
-      const fullPath = prefix
-        ? `${prefix}/${entry.path}`
-        : entry.path;
+      const fullPath = prefix ? `${prefix}/${entry.path}` : entry.path;
 
       if (paths.has(fullPath)) {
         throw new GitHubApiError(
@@ -561,12 +574,10 @@ export async function getGitHubRepositoryTree(
 
       paths.add(fullPath);
 
-      const fullEntry: GitHubTreeEntry = {
+      entries.push({
         ...entry,
         path: fullPath,
-      };
-
-      entries.push(fullEntry);
+      });
 
       if (entries.length > MAX_TREE_ENTRIES) {
         throw new GitHubApiError(
@@ -578,11 +589,7 @@ export async function getGitHubRepositoryTree(
       }
 
       if (entry.type === "tree") {
-        await walkTree(
-          entry.sha,
-          fullPath,
-          nextAncestors,
-        );
+        await walkTree(entry.sha, fullPath, nextAncestors);
       }
     }
   }
@@ -595,6 +602,21 @@ export async function getGitHubRepositoryTree(
     entries,
     recoveredFromTruncation: true,
   };
+}
+
+/**
+ * Resolves a branch, tag or commit reference and retrieves its tree.
+ *
+ * This wrapper preserves the existing public API.
+ */
+export async function getGitHubRepositoryTree(
+  owner: string,
+  name: string,
+  revision: string,
+): Promise<GitHubRepositoryTree> {
+  const commit = await resolveGitHubCommit(owner, name, revision);
+
+  return getGitHubRepositoryTreeForCommit(owner, name, commit);
 }
 
 function assertUniqueTreePaths(entries: GitHubTreeEntry[]): void {
@@ -612,4 +634,109 @@ function assertUniqueTreePaths(entries: GitHubTreeEntry[]): void {
 
     paths.add(entry.path);
   }
+}
+/**
+ * Retrieves and verifies a GitHub blob using its immutable SHA.
+ *
+ * Validates:
+ * - Requested and returned Git blob SHA
+ * - Base64 encoding
+ * - Decoded content size
+ * - Git's SHA-1 blob object hash
+ *
+ * Returns the verified file contents as a Buffer.
+ */
+export async function getGitHubBlob(
+  owner: string,
+  name: string,
+  blobSha: string,
+): Promise<GitHubBlobContent> {
+  if (!isValidSha(blobSha)) {
+    throw new GitHubApiError(
+      "A valid Git blob SHA is required.",
+      "INVALID_RESPONSE",
+      400,
+      false,
+    );
+  }
+
+  const blob = await githubFetch<GitHubBlob>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/git/blobs/${encodeURIComponent(blobSha)}`,
+  );
+
+  if (
+    !blob ||
+    !isValidSha(blob.sha) ||
+    blob.sha.toLowerCase() !== blobSha.toLowerCase() ||
+    !Number.isSafeInteger(blob.size) ||
+    blob.size < 0 ||
+    typeof blob.content !== "string" ||
+    blob.encoding !== "base64"
+  ) {
+    throw new GitHubApiError(
+      "GitHub returned invalid blob metadata.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  // GitHub may include line breaks in Base64 content.
+  const normalizedBase64 = blob.content.replace(/\s/g, "");
+
+  // Reject invalid Base64 characters and malformed padding.
+  const validBase64 =
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+  if (!validBase64.test(normalizedBase64)) {
+    throw new GitHubApiError(
+      "GitHub returned invalid Base64 blob content.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  const content = Buffer.from(normalizedBase64, "base64");
+
+  // Ensure decoding was canonical and lossless.
+  if (content.toString("base64") !== normalizedBase64) {
+    throw new GitHubApiError(
+      "GitHub returned malformed Base64 blob content.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  if (content.byteLength !== blob.size) {
+    throw new GitHubApiError(
+      "GitHub blob content size does not match its reported size.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  // Git hashes the complete blob object, not just its raw content.
+  const gitObjectHeader = Buffer.from(`blob ${content.byteLength}\0`);
+
+  const calculatedGitSha = createHash("sha1")
+    .update(Buffer.concat([gitObjectHeader, content]))
+    .digest("hex");
+
+  if (calculatedGitSha !== blobSha.toLowerCase()) {
+    throw new GitHubApiError(
+      "GitHub blob content failed SHA verification.",
+      "INVALID_RESPONSE",
+      200,
+      false,
+    );
+  }
+
+  return {
+    sha: calculatedGitSha,
+    sizeBytes: content.byteLength,
+    content,
+  };
 }

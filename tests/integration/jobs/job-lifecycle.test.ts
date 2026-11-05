@@ -1,3 +1,4 @@
+// tests/integration/jobs/job-lifecycle.test.ts
 import {
   beforeAll,
   afterAll,
@@ -12,14 +13,14 @@ import { config } from "dotenv";
 
 config({ path: ".env" });
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma } from "../../../lib/db/prisma";
 import {
   startIndexingJob,
   completeIndexingJob,
   failIndexingJob,
   retryIndexingJob,
-} from "@/lib/jobs/job-lifecycle";
-import { JobTransitionError } from "@/lib/jobs/job-errors";
+} from "../../../lib/jobs/job-lifecycle";
+import { JobTransitionError } from "../../../lib/jobs/job-errors";
 
 describe("Indexing job lifecycle integration tests", () => {
   const testRunId = randomUUID();
@@ -74,6 +75,16 @@ describe("Indexing job lifecycle integration tests", () => {
   });
 
   async function createJob(maxAttempts = 3) {
+    // Only one job may be active per repository. These tests share one
+    // repository, so retire jobs left over from earlier tests first.
+    await prisma.indexingJob.updateMany({
+      where: {
+        repositoryId,
+        status: { in: ["PENDING", "PROCESSING"] },
+      },
+      data: { status: "COMPLETED" },
+    });
+
     const job = await prisma.indexingJob.create({
       data: {
         repositoryId,

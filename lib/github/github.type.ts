@@ -43,3 +43,15 @@ export interface GitHubRepositoryTree {
   entries: GitHubTreeEntry[];
   recoveredFromTruncation: boolean;
 }
+export interface GitHubBlob {
+  sha: string;
+  size: number;
+  content: string;
+  encoding: "base64";
+}
+
+export interface GitHubBlobContent {
+  sha: string;
+  sizeBytes: number;
+  content: Buffer;
+}

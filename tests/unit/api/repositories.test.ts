@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -203,9 +202,7 @@ describe("POST /api/repositories", () => {
   });
 
   it("rejects unauthenticated requests with HTTP 401", async () => {
-    mocks.requireSession.mockRejectedValue(
-      new Error("UNAUTHORIZED"),
-    );
+    mocks.requireSession.mockRejectedValue(new Error("UNAUTHORIZED"));
 
     const response = await POST(
       createRequest({
@@ -252,20 +249,20 @@ describe("POST /api/repositories", () => {
     expect(mocks.repositoryCreate).toHaveBeenCalledTimes(1);
     expect(mocks.indexingJobCreate).toHaveBeenCalledTimes(1);
   });
-it("returns HTTP 409 when a concurrent duplicate violates the unique constraint", async () => {
-  mocks.transaction.mockRejectedValue({
-    code: "P2002",
+  it("returns HTTP 409 when a concurrent duplicate violates the unique constraint", async () => {
+    mocks.transaction.mockRejectedValue({
+      code: "P2002",
+    });
+
+    const response = await POST(
+      createRequest({
+        url: "https://github.com/facebook/react",
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(mocks.repositoryCreate).not.toHaveBeenCalled();
   });
-
-  const response = await POST(
-    createRequest({
-      url: "https://github.com/facebook/react",
-    }),
-  );
-
-  expect(response.status).toBe(409);
-  expect(mocks.repositoryCreate).not.toHaveBeenCalled();
-});
   it("does not create a repository if the transaction fails", async () => {
     mocks.transaction.mockRejectedValue(
       new Error("Simulated database transaction failure"),

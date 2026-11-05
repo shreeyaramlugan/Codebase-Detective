@@ -1,4 +1,9 @@
+// components/dashboard/RepositoryOverview.tsx
 import RepositoryRetryButton from "@/components/dashboard/RepositoryRetryButton";
+import RepositoryIngestButton from "@/components/dashboard/RepositoryIngestButton";
+import SnapshotHistory, {
+  type SnapshotHistoryItem,
+} from "@/components/dashboard/SnapshotHistory";
 
 export type Repository = {
   id: string;
@@ -10,7 +15,13 @@ export type Repository = {
   defaultBranch: string | null;
   updatedAt: string | null;
   analysisStatus:
-    "not_started" | "queued" | "processing" | "completed" | "failed";
+    | "not_started"
+    | "queued"
+    | "processing"
+    | "completed"
+    | "partial"
+    | "failed";
+  snapshots?: SnapshotHistoryItem[];
 
   latestJob: {
     id: string;
@@ -45,6 +56,8 @@ function getStatusLabel(status: Repository["analysisStatus"]) {
       return "Processing";
     case "completed":
       return "Indexed";
+    case "partial":
+      return "Partially indexed";
     case "failed":
       return "Failed";
     default:
@@ -114,11 +127,13 @@ export default function RepositoryOverview({
                     className={`rounded-full px-3 py-1 text-xs font-medium ${
                       repository.analysisStatus === "completed"
                         ? "bg-emerald-500/10 text-emerald-400"
-                        : repository.analysisStatus === "failed"
-                          ? "bg-red-500/10 text-red-400"
-                          : repository.analysisStatus === "processing"
-                            ? "bg-blue-500/10 text-blue-400"
-                            : "bg-stone-800 text-stone-300"
+                        : repository.analysisStatus === "partial"
+                          ? "bg-amber-500/10 text-amber-400"
+                          : repository.analysisStatus === "failed"
+                            ? "bg-red-500/10 text-red-400"
+                            : repository.analysisStatus === "processing"
+                              ? "bg-blue-500/10 text-blue-400"
+                              : "bg-stone-800 text-stone-300"
                     }`}
                   >
                     {getStatusLabel(repository.analysisStatus)}
@@ -175,10 +190,45 @@ export default function RepositoryOverview({
                   )}
 
                   {job?.status === "COMPLETED" && (
-                    <p className="mt-2 text-xs text-emerald-400">
-                      Repository metadata indexing completed.
+                    <p
+                      className={`mt-2 text-xs ${
+                        repository.analysisStatus === "partial"
+                          ? "text-amber-400"
+                          : "text-emerald-400"
+                      }`}
+                    >
+                      {repository.analysisStatus === "partial"
+                        ? "Ingestion finished with some files missing."
+                        : "Source ingestion completed."}
                     </p>
                   )}
+
+                  {(!job ||
+                    job.status === "COMPLETED" ||
+                    (job.status === "FAILED" &&
+                      job.attempts >= job.maxAttempts)) && (
+                    <div className="mt-3">
+                      <RepositoryIngestButton
+                        repositoryId={repository.id}
+                        label={
+                          repository.analysisStatus === "partial"
+                            ? "Retry failed files"
+                            : repository.snapshots &&
+                                repository.snapshots.length > 0
+                              ? "Re-ingest latest commit"
+                              : "Ingest source"
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 border-t border-stone-800 pt-4">
+                  <span className="text-xs font-medium text-stone-400">
+                    Snapshot history
+                  </span>
+
+                  <SnapshotHistory snapshots={repository.snapshots ?? []} />
                 </div>
 
                 <p className="mt-4 text-xs text-stone-500">

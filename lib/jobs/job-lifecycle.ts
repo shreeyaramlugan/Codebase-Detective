@@ -1,3 +1,4 @@
+// lib/jobs/job-lifecycle.ts
 import { prisma } from "@/lib/db/prisma";
 import { JobTransitionError } from "./job-errors";
 
@@ -78,7 +79,15 @@ export async function startIndexingJob(jobId: string) {
 /**
  * Mark a processing job as completed.
  */
-export async function completeIndexingJob(jobId: string) {
+/**
+ * Mark a processing job as completed.
+ *
+ * Repository status defaults to INDEXED for backward compatibility.
+ */
+export async function completeIndexingJob(
+  jobId: string,
+  repositoryStatus: "INDEXED" | "PARTIALLY_INDEXED" = "INDEXED",
+) {
   return prisma.$transaction(async (tx) => {
     const result = await tx.indexingJob.updateMany({
       where: {
@@ -118,13 +127,12 @@ export async function completeIndexingJob(jobId: string) {
 
     await tx.repository.update({
       where: { id: job.repositoryId },
-      data: { status: "INDEXED" },
+      data: { status: repositoryStatus },
     });
 
     return job;
   });
 }
-
 /**
  * Mark a processing job as failed and schedule its next retry.
  *
@@ -267,6 +275,26 @@ export async function retryIndexingJob(jobId: string) {
     const job = await tx.indexingJob.findUniqueOrThrow({
       where: { id: jobId },
     });
+
+    // Never run two active jobs for one repository at the same time.
+    // Checked only after the job is known to be eligible, so existing
+    // error codes are unchanged. Throwing rolls the transaction back, so
+    // the job stays FAILED.
+    const otherActiveJob = await tx.indexingJob.findFirst({
+      where: {
+        repositoryId: job.repositoryId,
+        id: { not: jobId },
+        status: { in: ["PENDING", "PROCESSING"] },
+      },
+      select: { id: true },
+    });
+
+    if (otherActiveJob) {
+      throw new JobTransitionError(
+        "Another job is already active for this repository.",
+        "JOB_ALREADY_CLAIMED",
+      );
+    }
 
     await tx.repository.update({
       where: { id: job.repositoryId },

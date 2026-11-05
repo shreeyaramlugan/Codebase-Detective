@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
@@ -8,6 +9,7 @@ import RepositorySubmission from "@/components/dashboard/RepositorySubmission";
 
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentSession } from "@/lib/auth/session";
+import { toSnapshotSummaryView } from "@/lib/ingestion/source-content/source-content.service";
 
 async function DashboardContent() {
   const session = await getCurrentSession();
@@ -27,6 +29,12 @@ async function DashboardContent() {
         },
         take: 1,
       },
+      snapshots: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+      },
     },
     orderBy: {
       createdAt: "desc",
@@ -39,7 +47,12 @@ async function DashboardContent() {
     const latestJob = repository.indexingJobs[0] ?? null;
 
     let analysisStatus:
-      "not_started" | "queued" | "processing" | "completed" | "failed";
+      | "not_started"
+      | "queued"
+      | "processing"
+      | "completed"
+      | "partial"
+      | "failed";
 
     switch (repository.status) {
       case "QUEUED":
@@ -50,6 +63,9 @@ async function DashboardContent() {
         break;
       case "INDEXED":
         analysisStatus = "completed";
+        break;
+      case "PARTIALLY_INDEXED":
+        analysisStatus = "partial";
         break;
       case "FAILED":
         analysisStatus = "failed";
@@ -77,6 +93,7 @@ async function DashboardContent() {
       defaultBranch: repository.defaultBranch,
       updatedAt: repository.updatedAt.toISOString(),
       analysisStatus,
+      snapshots: repository.snapshots.map(toSnapshotSummaryView),
       latestJob: latestJob
         ? {
             id: latestJob.id,
@@ -99,7 +116,9 @@ async function DashboardContent() {
   ).length;
 
   const completedAnalyses = repositories.filter(
-    (repository) => repository.analysisStatus === "completed",
+    (repository) =>
+      repository.analysisStatus === "completed" ||
+      repository.analysisStatus === "partial",
   ).length;
 
   return (

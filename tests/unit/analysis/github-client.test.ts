@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
 import {
   fetchGitHubRepositoryMetadata,
+  getGitHubBlob,
   getGitHubRepositoryTree,
 } from "../../../lib/github/github.client";
 import { GitHubApiError } from "../../../lib/github/github.errors";
-
+import { createHash } from "node:crypto";
 const mockRepository = {
   id: 10270250,
   name: "react",
@@ -215,11 +215,7 @@ describe("getGitHubRepositoryTree", () => {
         ),
       );
 
-    const result = await getGitHubRepositoryTree(
-      "owner",
-      "repo",
-      "main",
-    );
+    const result = await getGitHubRepositoryTree("owner", "repo", "main");
 
     expect(result.commitSha).toBe(TEST_COMMIT_SHA);
     expect(result.rootTreeSha).toBe(TEST_ROOT_TREE_SHA);
@@ -307,11 +303,7 @@ describe("getGitHubRepositoryTree", () => {
         ),
       );
 
-    const result = await getGitHubRepositoryTree(
-      "owner",
-      "repo",
-      "main",
-    );
+    const result = await getGitHubRepositoryTree("owner", "repo", "main");
 
     expect(result.recoveredFromTruncation).toBe(true);
 
@@ -333,9 +325,7 @@ describe("getGitHubRepositoryTree", () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify(
-            mockTreeResponse(TEST_ROOT_TREE_SHA, [], true),
-          ),
+          JSON.stringify(mockTreeResponse(TEST_ROOT_TREE_SHA, [], true)),
           { status: 200 },
         ),
       )
@@ -356,9 +346,7 @@ describe("getGitHubRepositoryTree", () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify(
-            mockTreeResponse(TEST_SOURCE_TREE_SHA, [], true),
-          ),
+          JSON.stringify(mockTreeResponse(TEST_SOURCE_TREE_SHA, [], true)),
           { status: 200 },
         ),
       );
@@ -432,6 +420,193 @@ describe("getGitHubRepositoryTree", () => {
 
     await expect(
       getGitHubRepositoryTree("owner", "repo", "main"),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+});
+function createGitBlob(content: Buffer) {
+  const header = Buffer.from(`blob ${content.byteLength}\0`);
+
+  const sha = createHash("sha1")
+    .update(Buffer.concat([header, content]))
+    .digest("hex");
+
+  return {
+    sha,
+    size: content.byteLength,
+    content: content.toString("base64"),
+    encoding: "base64" as const,
+  };
+}
+
+describe("getGitHubBlob", () => {
+  it("retrieves and verifies a valid GitHub blob", async () => {
+    const content = Buffer.from("console.log('Hello World');");
+    const blob = createGitBlob(content);
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(blob), { status: 200 }),
+      );
+
+    const result = await getGitHubBlob("owner", "repo", blob.sha);
+
+    expect(result.sha).toBe(blob.sha);
+    expect(result.sizeBytes).toBe(content.byteLength);
+    expect(result.content.equals(content)).toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      `/git/blobs/${blob.sha}`,
+    );
+  });
+
+  it("supports empty blobs", async () => {
+    const content = Buffer.alloc(0);
+    const blob = createGitBlob(content);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(blob), { status: 200 }),
+    );
+
+    const result = await getGitHubBlob("owner", "repo", blob.sha);
+
+    expect(result.content.byteLength).toBe(0);
+    expect(result.sha).toBe(blob.sha);
+  });
+
+  it("supports Unicode content", async () => {
+    const content = Buffer.from("Hello 🌍 café");
+    const blob = createGitBlob(content);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(blob), { status: 200 }),
+    );
+
+    const result = await getGitHubBlob("owner", "repo", blob.sha);
+
+    expect(result.content.toString("utf8")).toBe("Hello 🌍 café");
+  });
+
+  it("rejects an invalid requested SHA before making a request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    await expect(
+      getGitHubBlob("owner", "repo", "invalid-sha"),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      status: 400,
+      retryable: false,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a response containing a different blob SHA", async () => {
+    const content = Buffer.from("test");
+    const blob = createGitBlob(content);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...blob,
+          sha: "f".repeat(40),
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      getGitHubBlob("owner", "repo", blob.sha),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      retryable: false,
+    });
+  });
+
+  it("rejects malformed Base64 content", async () => {
+    const content = Buffer.from("test");
+    const blob = createGitBlob(content);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...blob,
+          content: "invalid@@@",
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      getGitHubBlob("owner", "repo", blob.sha),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+
+  it("rejects a reported size that differs from the decoded content", async () => {
+    const content = Buffer.from("test");
+    const blob = createGitBlob(content);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...blob,
+          size: 100,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      getGitHubBlob("owner", "repo", blob.sha),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+
+  it("rejects content that fails Git SHA verification", async () => {
+    const original = createGitBlob(Buffer.from("original"));
+    const different = Buffer.from("tampered");
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...original,
+          size: different.byteLength,
+          content: different.toString("base64"),
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      getGitHubBlob("owner", "repo", original.sha),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      retryable: false,
+    });
+  });
+
+  it("rejects unsupported blob encodings", async () => {
+    const content = Buffer.from("test");
+    const blob = createGitBlob(content);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...blob,
+          encoding: "utf-8",
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      getGitHubBlob("owner", "repo", blob.sha),
     ).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
     });
