@@ -1,4 +1,6 @@
 // components/dashboard/RepositoryOverview.tsx
+import Link from "next/link";
+
 import RepositoryRetryButton from "@/components/dashboard/RepositoryRetryButton";
 import RepositoryIngestButton from "@/components/dashboard/RepositoryIngestButton";
 import SnapshotHistory, {
@@ -231,9 +233,18 @@ export default function RepositoryOverview({
                   <SnapshotHistory snapshots={repository.snapshots ?? []} />
                 </div>
 
-                <p className="mt-4 text-xs text-stone-500">
-                  Last updated: {formatDate(repository.updatedAt)}
-                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-stone-500">
+                    Last updated: {formatDate(repository.updatedAt)}
+                  </p>
+
+                  <Link
+                    href={`/dashboard/repositories/${encodeURIComponent(repository.id)}`}
+                    className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs font-medium text-orange-300 transition hover:bg-orange-500/10"
+                  >
+                    Open explorer
+                  </Link>
+                </div>
               </article>
             );
           })}

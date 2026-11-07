@@ -1,3 +1,4 @@
+// components/dashboard/DashboardSidebar.tsx
 "use client";
 
 import Link from "next/link";
@@ -9,29 +10,23 @@ type DashboardSidebarProps = {
   onClose: () => void;
 };
 
-const navigation = [
+const navigation: Array<{
+  label: string;
+  href: string;
+  icon: string;
+  upcoming?: string;
+}> = [
   {
     label: "Overview",
     href: "/dashboard",
     icon: "grid",
   },
   {
+    // Sprint 04: the explorer (files, source, symbols, graph, search) lives
+    // inside each repository's workspace.
     label: "Repositories",
-    href: "#",
-    upcoming: "01.5",
+    href: "/dashboard/repositories",
     icon: "github",
-  },
-  {
-    label: "Code Explorer",
-    href: "#",
-    upcoming: "03",
-    icon: "code",
-  },
-  {
-    label: "Dependency Graph",
-    href: "#",
-    upcoming: "03",
-    icon: "network",
   },
   {
     label: "Findings",
@@ -154,7 +149,10 @@ export default function DashboardSidebar({
           <nav className="space-y-1" aria-label="Main navigation">
             {navigation.map((item) => {
               const active =
-                item.href === "/dashboard" ? pathname === "/dashboard" : false;
+                item.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
 
               return item.upcoming ? (
                 <div
