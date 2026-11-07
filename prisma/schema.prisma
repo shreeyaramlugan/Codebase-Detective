@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -35,6 +36,7 @@ enum SnapshotProcessingStatus {
   COMPLETED
   FAILED
 }
+
 enum SnapshotCompleteness {
   COMPLETE
   PARTIAL
@@ -65,6 +67,7 @@ model User {
   updatedAt     DateTime @updatedAt
 
   repositories Repository[]
+  codeAnalyses CodeAnalysis[]
   sessions     Session[]
   accounts     Account[]
 
@@ -100,6 +103,7 @@ model Repository {
 
   indexingJobs IndexingJob[]
   snapshots    RepositorySnapshot[]
+  codeAnalyses CodeAnalysis[]
 
   @@unique([ownerId, fullName])
   @@unique([ownerId, githubId])
@@ -217,7 +221,8 @@ model RepositorySnapshot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files SnapshotFile[]
+  files        SnapshotFile[]
+  codeAnalyses CodeAnalysis[]
 
   @@unique([repositoryId, commitSha])
   @@index([repositoryId, createdAt])
@@ -246,6 +251,355 @@ model SnapshotFile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  analysisFiles AnalysisFile[]
+
   @@unique([snapshotId, path])
   @@index([snapshotId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 03 - Code intelligence
+//
+// Relational records are the source of truth. AnalysisGraph is a derived read
+// model that can be regenerated from them. Every execution creates a new
+// CodeAnalysis; nothing is ever updated across runs.
+// ---------------------------------------------------------------------------
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum AnalysisFileStatus {
+  ANALYSED
+  ANALYSED_WITH_ERRORS
+  CONFIG
+  SKIPPED
+  FAILED
+}
+
+enum AnalysisSymbolKind {
+  FUNCTION
+  CLASS
+  METHOD
+  INTERFACE
+  TYPE
+  VARIABLE
+  ENUM
+}
+
+enum ModuleDependencyKind {
+  IMPORT
+  SIDE_EFFECT_IMPORT
+  DYNAMIC_IMPORT
+  REQUIRE
+  RE_EXPORT
+  EXPORT_ALL
+}
+
+enum ModuleSystem {
+  ESM
+  CJS
+}
+
+enum ResolutionStatus {
+  RESOLVED
+  UNRESOLVED
+  AMBIGUOUS
+  EXTERNAL
+}
+
+enum CodeCallKind {
+  CALL
+  NEW
+  SUPER
+}
+
+enum CodeCallResolution {
+  CONFIRMED
+  POSSIBLE
+  UNRESOLVED
+}
+
+enum CodeRelationKind {
+  EXTENDS
+  IMPLEMENTS
+  REFERENCES
+}
+
+enum DiagnosticSeverity {
+  ERROR
+  WARNING
+  INFO
+}
+
+enum DiagnosticSource {
+  SNAPSHOT
+  PARSER
+  EXTRACTOR
+  RESOLVER
+  LINKER
+  CONFIG
+  GRAPH
+  ENGINE
+}
+
+/// One immutable execution of the analysis engine against one snapshot.
+model CodeAnalysis {
+  id String @id @default(cuid())
+
+  snapshotId String
+  snapshot   RepositorySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  requestedById String
+  requestedBy   User   @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  status               AnalysisStatus        @default(PENDING)
+  /// Completeness of the snapshot at analysis time (never upgraded).
+  snapshotCompleteness SnapshotCompleteness?
+  commitSha            String
+
+  engineVersion      String
+  parserVersion      String
+  graphSchemaVersion Int?
+
+  /// Counters plus snapshot skip/failure reasons.
+  stats        Json?
+  errorCode    String?
+  errorMessage String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  files        AnalysisFile[]
+  symbols      CodeSymbol[]
+  dependencies ModuleDependency[]
+  calls        CodeCall[]
+  relations    CodeRelation[]
+  diagnostics  AnalysisDiagnostic[]
+  graph        AnalysisGraph?
+
+  @@index([snapshotId, createdAt])
+  @@index([repositoryId])
+  @@index([requestedById])
+  @@index([status])
+}
+
+/// File-level analysis boundary (also the unit of future incremental reuse).
+model AnalysisFile {
+  id         String       @id @default(cuid())
+  analysisId String
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  snapshotFileId String?
+  snapshotFile   SnapshotFile? @relation(fields: [snapshotFileId], references: [id], onDelete: SetNull)
+
+  path             String
+  extension        String
+  scriptKind       String?
+  moduleSyntax     String
+  status           AnalysisFileStatus
+  reason           String?
+  contentHash      String
+  sizeBytes        Int
+  lineCount        Int                @default(0)
+  syntaxErrorCount Int                @default(0)
+  symbolCount      Int                @default(0)
+
+  symbols      CodeSymbol[]
+  dependencies ModuleDependency[]
+  calls        CodeCall[]
+  relations    CodeRelation[]
+  diagnostics  AnalysisDiagnostic[]
+
+  @@unique([analysisId, path])
+  @@index([analysisId, status])
+}
+
+model CodeSymbol {
+  /// Deterministic per run: hash(analysisId, stableKey).
+  id         String       @id
+  analysisId String
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  fileId     String
+  file       AnalysisFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  /// Run-independent identity (path + scope + kind + name + ordinal).
+  stableKey     String
+  name          String
+  kind          AnalysisSymbolKind
+  qualifiedName String
+
+  parentId String?
+  parent   CodeSymbol?  @relation("SymbolContainment", fields: [parentId], references: [id], onDelete: Cascade)
+  children CodeSymbol[] @relation("SymbolContainment")
+
+  isExported      Boolean  @default(false)
+  isDefaultExport Boolean  @default(false)
+  exportNames     String[]
+
+  startLine   Int
+  startColumn Int
+  endLine     Int
+  endColumn   Int
+
+  details Json
+
+  callsMade       CodeCall[]     @relation("CallCaller")
+  callsReceived   CodeCall[]     @relation("CallTarget")
+  relationsMade   CodeRelation[] @relation("RelationSource")
+  relationsTarget CodeRelation[] @relation("RelationTarget")
+
+  @@unique([analysisId, stableKey])
+  @@index([analysisId, fileId])
+  @@index([analysisId, kind])
+  @@index([analysisId, name])
+  @@index([parentId])
+}
+
+model ModuleDependency {
+  id         String       @id @default(cuid())
+  analysisId String
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  fileId     String
+  file       AnalysisFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  key          String
+  sourcePath   String
+  kind         ModuleDependencyKind
+  /// The original specifier exactly as written.
+  specifier    String
+  isTypeOnly   Boolean              @default(false)
+  moduleSystem ModuleSystem
+  bindings     Json
+
+  startLine   Int
+  startColumn Int
+  endLine     Int
+  endColumn   Int
+
+  status          ResolutionStatus
+  targetPath      String?
+  targetAnalysed  Boolean          @default(false)
+  externalPackage String?
+  reason          String
+  candidates      String[]
+  evidence        String[]
+
+  @@unique([analysisId, key])
+  @@index([analysisId, fileId])
+  @@index([analysisId, status])
+  @@index([analysisId, targetPath])
+}
+
+model CodeCall {
+  id         String       @id @default(cuid())
+  analysisId String
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  fileId     String
+  file       AnalysisFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  key        String
+  sourcePath String
+  kind       CodeCallKind
+
+  callerSymbolId String?
+  callerSymbol   CodeSymbol? @relation("CallCaller", fields: [callerSymbolId], references: [id], onDelete: Cascade)
+
+  calleeText String
+  optional   Boolean            @default(false)
+  resolution CodeCallResolution
+
+  targetSymbolId String?
+  targetSymbol   CodeSymbol? @relation("CallTarget", fields: [targetSymbolId], references: [id], onDelete: Cascade)
+
+  reason String
+
+  startLine   Int
+  startColumn Int
+  endLine     Int
+  endColumn   Int
+
+  @@unique([analysisId, key])
+  @@index([analysisId, fileId])
+  @@index([analysisId, resolution])
+  @@index([callerSymbolId])
+  @@index([targetSymbolId])
+}
+
+/// EXTENDS / IMPLEMENTS / REFERENCES evidence between symbols.
+model CodeRelation {
+  id         String       @id @default(cuid())
+  analysisId String
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  fileId     String
+  file       AnalysisFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  key        String
+  kind       CodeRelationKind
+  sourcePath String
+
+  sourceSymbolId String?
+  sourceSymbol   CodeSymbol? @relation("RelationSource", fields: [sourceSymbolId], references: [id], onDelete: Cascade)
+
+  targetName     String
+  targetSymbolId String?
+  targetSymbol   CodeSymbol? @relation("RelationTarget", fields: [targetSymbolId], references: [id], onDelete: Cascade)
+
+  status ResolutionStatus
+  reason String
+
+  startLine   Int
+  startColumn Int
+  endLine     Int
+  endColumn   Int
+
+  @@unique([analysisId, key])
+  @@index([analysisId, fileId])
+  @@index([analysisId, kind])
+}
+
+model AnalysisDiagnostic {
+  id         String        @id @default(cuid())
+  analysisId String
+  analysis   CodeAnalysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  fileId     String?
+  file       AnalysisFile? @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  severity DiagnosticSeverity
+  source   DiagnosticSource
+  code     String
+  message  String
+  path     String?
+  line     Int?
+  column   Int?
+  details  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([analysisId, severity])
+  @@index([analysisId, source])
+  @@index([analysisId, fileId])
+}
+
+/// Derived read model. Always regeneratable from the relational records.
+model AnalysisGraph {
+  id         String       @id @default(cuid())
+  analysisId String       @unique
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  schemaVersion Int
+  nodeCount     Int
+  edgeCount     Int
+  graph         Json
+
+  createdAt DateTime @default(now())
 }

@@ -552,3 +552,34 @@ Implemented commit-based GitHub repository ingestion, immutable
 repository snapshots, file classification, source storage,
 content integrity verification, snapshot completeness tracking,
 idempotent retries and owner-protected source retrieval.
+### Sprint 03 — Code Intelligence Engine
+
+**Status: Complete**
+
+Implemented the deterministic, non-executing code intelligence engine using the TypeScript Compiler API. The engine parses JavaScript and TypeScript source files, including JSX and TSX, extracts code structures and symbols, resolves module dependencies, identifies statically traceable function calls, and generates a structured dependency graph.
+
+**### Delivered**
+
+- JavaScript, TypeScript, JSX and TSX parsing.
+- AST-based extraction of functions, classes, methods, interfaces, types, variables and enums.
+- Import, export and CommonJS analysis.
+- Source-location tracking for extracted code structures and relationships.
+- Stable symbol identification and symbol registry.
+- Module resolution supporting relative imports, path aliases, package metadata and CommonJS.
+- Explicit handling of resolved, unresolved, ambiguous and external dependencies.
+- Static function-call relationship extraction, including uncertain call identification.
+- Dependency graph generation with structured nodes, edges and relationship evidence.
+- Relational persistence of analysis records, symbols, dependencies and diagnostics.
+- Derived, regeneratable graph JSON read model.
+- Immutable analysis runs, preserving previous results and failed runs.
+- Analysis engine and parser version tracking.
+- Foundation for future incremental analysis.
+- Authenticated, owner-protected analysis and result retrieval.
+- Parser, extraction, resolver, graph, integration and security tests.
+- Updated technical documentation and README.
+
+**### Completion decision**
+
+Sprint 03 acceptance criteria are satisfied. The project now has a deterministic code intelligence foundation capable of transforming stored repository snapshots into structured, traceable code representations. The analysis engine does not execute repository code or rely on AI to establish code structures and dependencies.
+
+The project is ready to proceed to Sprint 04, subject to the normal project-level review and version-control checkpoint.
