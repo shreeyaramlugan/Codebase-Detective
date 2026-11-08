@@ -639,3 +639,41 @@ Sprint 04 acceptance criteria are satisfied. The project now provides an interac
 Users can navigate repository files, inspect source code, locate extracted symbols, explore dependency relationships and search across the analysed codebase. The explorer uses persisted analysis results and preserves the distinction between confirmed, possible and unresolved relationships.
 
 The project is ready to proceed to Sprint 05, subject to the normal project-level review and version-control checkpoint.
+### Sprint 05 — Deterministic Findings Engine
+
+**Status: Complete**
+
+Implemented the deterministic, rule-based findings engine, extending the code intelligence foundation from Sprint 03 to identify codebase issues and architectural observations. The engine evaluates analysed repository data against versioned rules, generates structured findings, preserves supporting source evidence and provides an interface for investigating findings and tracking changes across repository snapshots.
+
+**### Delivered**
+
+- Deterministic rule engine with structured rule registration and evaluation.
+- Stable rule identifiers and version tracking.
+- Dependency analysis rules for unresolved internal imports and circular dependencies.
+- Unused export detection where supported by available analysis evidence.
+- Code complexity metrics and configurable thresholds.
+- Structural analysis for empty modules, unusually large modules and repeated patterns.
+- Static security indicator rules with evidence-based reporting.
+- Structured finding generation with categories, severity and descriptions.
+- Finding evidence tracking linked to repository snapshots, analysis runs, files and symbols.
+- Relational persistence of findings and supporting evidence.
+- Finding deduplication within individual analysis runs.
+- Findings dashboard with overview statistics and categorisation.
+- Finding search and filtering by severity and category.
+- Detailed finding views with supporting evidence and recommendations.
+- Navigation from findings to affected source files and locations.
+- Snapshot finding comparison.
+- Classification of findings as new, persistent or resolved.
+- Preservation of finding history across immutable analysis runs.
+- Handling of partial analysis results to prevent unsupported resolution claims.
+- Authenticated, owner-protected findings and evidence retrieval.
+- Rule engine, finding generation, persistence, comparison, integration and security tests.
+- Updated technical documentation and README.
+
+**### Completion decision**
+
+Sprint 05 acceptance criteria are satisfied. Codebase Detective can now evaluate analysed repositories using deterministic rules and generate structured, evidence-backed findings.
+
+The platform identifies dependency issues, complexity concerns, structural observations and static security indicators. Findings are traceable to their originating rules, analysis runs and source evidence. The platform also supports investigating findings and tracking how they change across repository snapshots.
+
+The project is ready to proceed to Sprint 06, subject to the normal project-level review and version-control checkpoint.

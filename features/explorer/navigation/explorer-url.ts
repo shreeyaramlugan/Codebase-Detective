@@ -10,6 +10,7 @@ export const EXPLORER_VIEWS = [
   "symbols",
   "graph",
   "search",
+  "findings",
 ] as const;
 
 export type ExplorerView = (typeof EXPLORER_VIEWS)[number];
@@ -26,6 +27,10 @@ export interface ExplorerState {
   symbol: string | null;
   /** Search / filter text. */
   q: string;
+  /** Selected findings run id (findings view). */
+  run: string | null;
+  /** Selected finding id (findings view). */
+  finding: string | null;
 }
 
 export const DEFAULT_STATE: ExplorerState = {
@@ -35,6 +40,8 @@ export const DEFAULT_STATE: ExplorerState = {
   line: null,
   symbol: null,
   q: "",
+  run: null,
+  finding: null,
 };
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -69,6 +76,8 @@ export function parseExplorerState(source: ParamSource): ExplorerState {
   const line = Number(read(source, "line"));
   const symbol = read(source, "symbol");
   const q = read(source, "q") ?? "";
+  const run = read(source, "run");
+  const finding = read(source, "finding");
 
   return {
     view: (EXPLORER_VIEWS as readonly string[]).includes(view ?? "")
@@ -79,6 +88,8 @@ export function parseExplorerState(source: ParamSource): ExplorerState {
     line: Number.isInteger(line) && line >= 1 && line <= MAX_LINE ? line : null,
     symbol: symbol && ID_PATTERN.test(symbol) ? symbol : null,
     q: q.slice(0, MAX_QUERY),
+    run: run && ID_PATTERN.test(run) ? run : null,
+    finding: finding && ID_PATTERN.test(finding) ? finding : null,
   };
 }
 
@@ -90,6 +101,8 @@ export function explorerSearchParams(state: ExplorerState): URLSearchParams {
   if (state.line) params.set("line", String(state.line));
   if (state.symbol) params.set("symbol", state.symbol);
   if (state.q) params.set("q", state.q);
+  if (state.run) params.set("run", state.run);
+  if (state.finding) params.set("finding", state.finding);
   return params;
 }
 

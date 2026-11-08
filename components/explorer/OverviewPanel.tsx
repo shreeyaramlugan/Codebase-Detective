@@ -296,7 +296,7 @@ export default function OverviewPanel({ overview, onNavigate }: Props) {
       )}
 
       {state.explorable && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {[
             {
               view: "files",
@@ -317,6 +317,11 @@ export default function OverviewPanel({ overview, onNavigate }: Props) {
               view: "search",
               title: "Search the codebase",
               text: "Files, symbols, modules and exports.",
+            },
+            {
+              view: "findings",
+              title: "Findings",
+              text: "Deterministic dependency, complexity, structure and security-indicator checks.",
             },
           ].map((card) => (
             <button

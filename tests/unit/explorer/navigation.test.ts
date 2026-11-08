@@ -21,6 +21,8 @@ describe("explorer URL state", () => {
       line: 12,
       symbol: "sym_1",
       q: "hello world",
+      run: "run_1",
+      finding: "fr_1",
     });
     const query = new URL(href, "http://x").searchParams;
     expect(parseExplorerState(query)).toEqual({
@@ -30,6 +32,8 @@ describe("explorer URL state", () => {
       line: 12,
       symbol: "sym_1",
       q: "hello world",
+      run: "run_1",
+      finding: "fr_1",
     });
   });
 

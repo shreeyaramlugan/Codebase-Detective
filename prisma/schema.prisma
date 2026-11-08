@@ -66,10 +66,12 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  repositories Repository[]
-  codeAnalyses CodeAnalysis[]
-  sessions     Session[]
-  accounts     Account[]
+  repositories   Repository[]
+  codeAnalyses   CodeAnalysis[]
+  findingsRuns   FindingsRun[]
+  findingReviews FindingReview[]
+  sessions       Session[]
+  accounts       Account[]
 
   @@map("user")
 }
@@ -101,9 +103,11 @@ model Repository {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  indexingJobs IndexingJob[]
-  snapshots    RepositorySnapshot[]
-  codeAnalyses CodeAnalysis[]
+  indexingJobs   IndexingJob[]
+  snapshots      RepositorySnapshot[]
+  codeAnalyses   CodeAnalysis[]
+  findingsRuns   FindingsRun[]
+  findingReviews FindingReview[]
 
   @@unique([ownerId, fullName])
   @@unique([ownerId, githubId])
@@ -386,6 +390,7 @@ model CodeAnalysis {
   relations    CodeRelation[]
   diagnostics  AnalysisDiagnostic[]
   graph        AnalysisGraph?
+  findingsRuns FindingsRun[]
 
   @@index([snapshotId, createdAt])
   @@index([repositoryId])
@@ -602,4 +607,202 @@ model AnalysisGraph {
   graph         Json
 
   createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 05 - Deterministic findings engine
+//
+// A FindingsRun is one immutable execution of the rule catalogue against one
+// CodeAnalysis. Findings are derived only from that analysis (plus hash-
+// verified source facts); nothing is updated across runs. User triage
+// (FindingReview) is stored separately so it never alters detection results.
+// ---------------------------------------------------------------------------
+
+enum FindingsRunStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum FindingCategory {
+  DEPENDENCY
+  COMPLEXITY
+  STRUCTURE
+  SECURITY
+}
+
+enum FindingSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum FindingCertainty {
+  CONFIRMED
+  MEASURED
+  INDICATOR
+}
+
+enum FindingEvidenceKind {
+  SOURCE_LOCATION
+  DEPENDENCY
+  SYMBOL
+  METRIC
+  CYCLE_EDGE
+  PATTERN_MATCH
+}
+
+enum FindingRuleRunStatus {
+  COMPLETED
+  SKIPPED
+  FAILED
+}
+
+enum FindingReviewStatus {
+  ACKNOWLEDGED
+  DISMISSED
+}
+
+model FindingsRun {
+  id String @id @default(cuid())
+
+  analysisId String
+  analysis   CodeAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  requestedById String
+  requestedBy   User   @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  status FindingsRunStatus @default(PENDING)
+
+  engineVersion    String
+  catalogueVersion String
+  /// The exact thresholds used; part of reproducibility and comparison.
+  thresholds       Json
+  /// Run-level limitations (partial analysis, missing facts, skipped rules).
+  limitations      Json?
+  /// Counters by severity/category, for fast dashboards.
+  stats            Json?
+  /// Which analysed files lacked verifiable source facts (path -> reason).
+  coverage         Json?
+  errorCode        String?
+  errorMessage     String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  findings Finding[]
+  ruleRuns FindingRuleRun[]
+
+  @@index([analysisId, createdAt])
+  @@index([repositoryId, createdAt])
+  @@index([requestedById])
+}
+
+model FindingRuleRun {
+  id    String      @id @default(cuid())
+  runId String
+  run   FindingsRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  ruleId         String
+  ruleVersion    String
+  status         FindingRuleRunStatus
+  reason         String?
+  findingCount   Int                  @default(0)
+  rejectedCount  Int                  @default(0)
+  duplicateCount Int                  @default(0)
+  limitations    Json?
+  configHash     String
+
+  @@unique([runId, ruleId])
+}
+
+model Finding {
+  id    String      @id @default(cuid())
+  runId String
+  run   FindingsRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  /// Stable identity across runs: hash(ruleId, subjectPath, subjectKey).
+  fingerprint String
+
+  ruleId      String
+  ruleVersion String
+  category    FindingCategory
+  severity    FindingSeverity
+  certainty   FindingCertainty
+
+  title          String
+  description    String
+  recommendation String
+
+  subjectPath  String
+  subjectKey   String
+  symbolKey    String?
+  primaryLine  Int?
+  measurements Json?
+
+  createdAt DateTime @default(now())
+
+  evidence FindingEvidence[]
+
+  @@unique([runId, fingerprint])
+  @@index([runId, severity])
+  @@index([runId, category])
+  @@index([runId, ruleId])
+  @@index([runId, subjectPath])
+}
+
+model FindingEvidence {
+  id        String  @id @default(cuid())
+  findingId String
+  finding   Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  ordinal   Int
+  kind      FindingEvidenceKind
+  filePath  String
+  symbolKey String?
+
+  startLine   Int?
+  startColumn Int?
+  endLine     Int?
+  endColumn   Int?
+
+  /// Short excerpt. Credential values are redacted before they reach here.
+  excerpt String?
+  message String
+  data    Json?
+
+  @@unique([findingId, ordinal])
+  @@index([findingId])
+}
+
+/// User triage for a finding, keyed by repository + fingerprint so it
+/// survives re-analysis. Never read by the detection engine.
+model FindingReview {
+  id String @id @default(cuid())
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  fingerprint String
+
+  status FindingReviewStatus
+  reason String?
+
+  reviewedById String
+  reviewedBy   User   @relation(fields: [reviewedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([repositoryId, fingerprint])
+  @@index([repositoryId, status])
 }

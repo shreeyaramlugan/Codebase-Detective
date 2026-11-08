@@ -16,6 +16,7 @@ import {
 import CodeSearch from "./CodeSearch";
 import DependencyGraph from "./DependencyGraph";
 import FileExplorer from "./FileExplorer";
+import FindingsPanel from "@/components/findings/FindingsPanel";
 import OverviewPanel from "./OverviewPanel";
 import SymbolExplorer from "./SymbolExplorer";
 import { Badge, ErrorBox, Spinner, formatDate, inputClass } from "./ui";
@@ -32,6 +33,7 @@ const LABELS: Record<ExplorerView, string> = {
   symbols: "Symbols",
   graph: "Dependency graph",
   search: "Search",
+  findings: "Findings",
 };
 
 export default function ExplorerWorkspace({
@@ -301,6 +303,16 @@ export default function ExplorerWorkspace({
             <DependencyGraph
               key={analysisId!}
               analysisId={analysisId!}
+              onNavigate={navigate}
+            />
+          )}
+
+          {explorable && view === "findings" && (
+            <FindingsPanel
+              key={analysisId!}
+              repositoryId={repositoryId}
+              analysisId={analysisId!}
+              state={state}
               onNavigate={navigate}
             />
           )}
