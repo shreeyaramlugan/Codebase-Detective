@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MockAIProvider } from "@/features/ai/providers/mock-provider";
-import { createAIProvider } from "@/features/ai/providers/provider-factory";
+import { MockAIProvider } from "../../../features/ai/providers/mock-provider";
+import { createAIProvider } from "../../../features/ai/providers/provider-factory";
 
 describe("createAIProvider", () => {
   afterEach(() => {

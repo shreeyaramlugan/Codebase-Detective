@@ -66,12 +66,15 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  repositories   Repository[]
-  codeAnalyses   CodeAnalysis[]
-  findingsRuns   FindingsRun[]
-  findingReviews FindingReview[]
-  sessions       Session[]
-  accounts       Account[]
+  repositories    Repository[]
+  codeAnalyses    CodeAnalysis[]
+  findingsRuns    FindingsRun[]
+  findingReviews  FindingReview[]
+  aiConversations AIConversation[]
+  aiUsageDays     AIUsageDay[]
+  aiUsageRecords  AIUsageRecord[]
+  sessions        Session[]
+  accounts        Account[]
 
   @@map("user")
 }
@@ -103,11 +106,12 @@ model Repository {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  indexingJobs   IndexingJob[]
-  snapshots      RepositorySnapshot[]
-  codeAnalyses   CodeAnalysis[]
-  findingsRuns   FindingsRun[]
-  findingReviews FindingReview[]
+  indexingJobs    IndexingJob[]
+  snapshots       RepositorySnapshot[]
+  codeAnalyses    CodeAnalysis[]
+  findingsRuns    FindingsRun[]
+  findingReviews  FindingReview[]
+  aiConversations AIConversation[]
 
   @@unique([ownerId, fullName])
   @@unique([ownerId, githubId])
@@ -225,8 +229,9 @@ model RepositorySnapshot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files        SnapshotFile[]
-  codeAnalyses CodeAnalysis[]
+  files           SnapshotFile[]
+  codeAnalyses    CodeAnalysis[]
+  aiConversations AIConversation[]
 
   @@unique([repositoryId, commitSha])
   @@index([repositoryId, createdAt])
@@ -383,14 +388,15 @@ model CodeAnalysis {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  files        AnalysisFile[]
-  symbols      CodeSymbol[]
-  dependencies ModuleDependency[]
-  calls        CodeCall[]
-  relations    CodeRelation[]
-  diagnostics  AnalysisDiagnostic[]
-  graph        AnalysisGraph?
-  findingsRuns FindingsRun[]
+  files           AnalysisFile[]
+  symbols         CodeSymbol[]
+  dependencies    ModuleDependency[]
+  calls           CodeCall[]
+  relations       CodeRelation[]
+  diagnostics     AnalysisDiagnostic[]
+  graph           AnalysisGraph?
+  findingsRuns    FindingsRun[]
+  aiConversations AIConversation[]
 
   @@index([snapshotId, createdAt])
   @@index([repositoryId])
@@ -805,4 +811,135 @@ model FindingReview {
 
   @@unique([repositoryId, fingerprint])
   @@index([repositoryId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 06 - AI investigation assistant
+//
+// A conversation has ONE current snapshot + analysis. Switching is an explicit
+// action that records a SYSTEM message. Every message stores its own snapshot,
+// analysis and commit (plain columns, no foreign keys) so historical provenance
+// can never be rewritten by a later switch. Usage rows are kept when a
+// conversation is deleted so daily limits cannot be reset by deleting history.
+// ---------------------------------------------------------------------------
+
+enum AIMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum AIMessageStatus {
+  COMPLETED
+  FAILED
+}
+
+enum AIUsageStatus {
+  SUCCEEDED
+  FAILED
+}
+
+model AIConversation {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  /// Current context; changed only by an explicit snapshot switch.
+  snapshotId String
+  snapshot   RepositorySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  analysisId String
+  analysis   CodeAnalysis       @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  title      String
+  archivedAt DateTime?
+
+  /// Single-flight guard: set while a question is being answered.
+  busyUntil    DateTime?
+  lastSequence Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AIMessage[]
+  usage    AIUsageRecord[]
+
+  @@index([userId, repositoryId, archivedAt, updatedAt])
+}
+
+model AIMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  sequence Int
+  role     AIMessageRole
+  status   AIMessageStatus @default(COMPLETED)
+
+  /// The question, the plain-text answer, or the switch description.
+  content String
+
+  /// Provenance of THIS message (not the conversation's current context).
+  snapshotId    String
+  analysisId    String
+  commitSha     String
+  findingsRunId String?
+
+  /// Validated answer (sections, citations, references) for ASSISTANT rows.
+  answer    Json?
+  retrieval Json?
+
+  provider     String?
+  model        String?
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+  errorCode    String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([conversationId, sequence])
+}
+
+/// Atomic per-user, per-UTC-day counters used to enforce daily limits.
+model AIUsageDay {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    String
+
+  requestCount Int @default(0)
+  tokenCount   Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, day])
+}
+
+/// Audit row per provider request. Survives conversation deletion.
+model AIUsageRecord {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  conversationId String?
+  conversation   AIConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  messageId      String?
+
+  provider     String
+  model        String
+  status       AIUsageStatus
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+  errorCode    String?
+  durationMs   Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([conversationId])
 }

@@ -677,3 +677,80 @@ Sprint 05 acceptance criteria are satisfied. Codebase Detective can now evaluate
 The platform identifies dependency issues, complexity concerns, structural observations and static security indicators. Findings are traceable to their originating rules, analysis runs and source evidence. The platform also supports investigating findings and tracking how they change across repository snapshots.
 
 The project is ready to proceed to Sprint 06, subject to the normal project-level review and version-control checkpoint.
+### Sprint 06 — AI Investigation Assistant
+
+**Status: Complete**
+
+Implemented the repository-specific AI Investigation Assistant, extending the deterministic code intelligence and findings capabilities from previous sprints with source-grounded AI explanations.
+
+The assistant uses the Google Gemini API through a provider-independent integration and retrieves evidence from Codebase Detective's existing database records. It allows users to investigate repository structure, understand files and symbols, explore dependencies, examine deterministic findings and ask questions about potential code changes.
+
+Responses are grounded in retrieved repository evidence and include validated source citations. The assistant preserves repository and snapshot context, supports persistent conversation management and enforces AI usage controls.
+
+**### Delivered**
+
+- Google Gemini API integration through a provider-independent AI architecture.
+- Centralised AI provider and model configuration.
+- Server-side AI credential management.
+- Database-backed repository evidence retrieval.
+- Retrieval of repository source files and documentation.
+- Retrieval of code symbols and source locations.
+- Retrieval of module dependencies and function-call relationships.
+- Retrieval of deterministic findings and supporting evidence.
+- Repository- and snapshot-scoped evidence retrieval.
+- Relevant evidence selection and bounded context assembly.
+- Repository-specific question answering and code explanations.
+- Cross-file implementation and relationship explanations.
+- Dependency and potential change-impact investigations.
+- Explanations of deterministic findings using their underlying evidence.
+- Explicit handling of confirmed, possible and unresolved relationships.
+- Uncertainty handling when sufficient evidence is unavailable.
+- Source-grounded AI responses with citation validation.
+- Inline clickable source citations.
+- Dedicated source references panel.
+- Source navigation integrated with the Interactive Codebase Explorer.
+- Snapshot-aware conversations with explicit snapshot switching.
+- Persistent conversation and message history.
+- Conversation creation, saving, renaming, archiving, restoration and deletion.
+- Provider, model and available usage metadata recording.
+- Daily user-level AI usage limits.
+- Per-request limits for questions and evidence context.
+- Request timeout, provider error and malformed response handling.
+- Completed-response delivery rather than streaming.
+- Loading, error and insufficient-evidence interface states.
+- Repository ownership and conversation access enforcement.
+- Snapshot and repository context isolation.
+- Prompt-injection safeguards for repository source code and documentation.
+- Protection against unsupported AI-generated findings, relationships and citations.
+- Integration, retrieval, provider, citation, conversation and security testing.
+- Updated technical documentation and README.
+
+**### Architecture and implementation decisions**
+
+| Area | Decision |
+|---|---|
+| AI provider | Google Gemini API |
+| Evidence retrieval | Database-backed retrieval |
+| Conversation snapshot behaviour | Explicit snapshot switching |
+| Citation presentation | Inline citations and source references panel |
+| Conversation history | Save, archive, rename and delete |
+| AI usage controls | Daily and per-request limits |
+| Response delivery | Display after completion |
+
+**### Completion decision**
+
+Sprint 06 acceptance criteria are satisfied. Codebase Detective now provides a repository-specific AI investigation assistant that uses existing deterministic analysis results and repository evidence to explain code structures, relationships and findings.
+
+The assistant does not replace the deterministic analysis or findings engines. It operates as an investigative and explanatory layer, using retrieved evidence to generate answers and validated source citations.
+
+Users can investigate their repositories through persistent, snapshot-aware conversations, navigate directly to cited source locations and manage their AI usage through daily and per-request limits.
+
+The project is ready to proceed to Sprint 07 — Research Engine, subject to the normal project-level review and version-control checkpoint.
+
+### Sprint 07 — Research Engine
+
+**Status: Planned**
+
+The next sprint will introduce a hybrid research engine combining official technical documentation and scholarly sources to support research-backed recommendations.
+
+Research outputs will complement the deterministic findings and source-grounded AI investigation capabilities established in earlier sprints.
