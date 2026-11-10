@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 
+import { researchSuggestion } from "@/features/research/engine/queries";
 import type { ExplorerState } from "@/features/explorer/navigation/explorer-url";
 import {
   CATEGORY_LABELS,
@@ -123,6 +124,26 @@ export default function FindingDetail({
             </h4>
             <p className="mt-2 text-sm text-stone-400">{data.description}</p>
           </div>
+
+          {researchSuggestion(data.ruleId) && (
+            <div className="rounded-xl border border-stone-800 bg-stone-950/40 p-3">
+              <p className="text-sm text-stone-300">
+                Research available: {researchSuggestion(data.ruleId)}.
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                Research searches official documentation and scholarly
+                sources. You review the sources before any recommendation is
+                written, and nothing changes in your code.
+              </p>
+              <button
+                type="button"
+                onClick={() => onNavigate({ view: "research", finding: findingId, research: null })}
+                className="mt-2 rounded-lg border border-orange-500/40 px-3 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-500/10"
+              >
+                Research this finding
+              </button>
+            </div>
+          )}
 
           {data.isIndicator && (
             <p

@@ -8,7 +8,7 @@ import type {
   DependencyGraph,
   GraphEdge,
   GraphNode,
-} from "@/features/code-intelligence/graph/graph.types";
+} from "../../../features/code-intelligence/graph/graph.types";
 import {
   applyGraphFilters,
   countByType,
@@ -18,8 +18,8 @@ import {
   layoutGraph,
   neighbourhood,
   type GraphFilters,
-} from "@/features/explorer/graph/graph-view";
-import { graphOf } from "@/tests/fixtures/code-intelligence/projects";
+} from "../../../features/explorer/graph/graph-view";
+import { graphOf } from "../../../tests/fixtures/code-intelligence/projects";
 
 const graph: DependencyGraph = graphOf({
   "src/a.ts": `import { b, B } from "./b";

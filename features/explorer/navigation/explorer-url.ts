@@ -12,6 +12,7 @@ export const EXPLORER_VIEWS = [
   "search",
   "findings",
   "assistant",
+  "research",
 ] as const;
 
 export type ExplorerView = (typeof EXPLORER_VIEWS)[number];
@@ -34,6 +35,8 @@ export interface ExplorerState {
   finding: string | null;
   /** Selected assistant conversation id (assistant view). */
   conversation: string | null;
+  /** Selected research run id (research view). */
+  research: string | null;
 }
 
 export const DEFAULT_STATE: ExplorerState = {
@@ -46,6 +49,7 @@ export const DEFAULT_STATE: ExplorerState = {
   run: null,
   finding: null,
   conversation: null,
+  research: null,
 };
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -83,6 +87,7 @@ export function parseExplorerState(source: ParamSource): ExplorerState {
   const run = read(source, "run");
   const finding = read(source, "finding");
   const conversation = read(source, "conversation");
+  const research = read(source, "research");
 
   return {
     view: (EXPLORER_VIEWS as readonly string[]).includes(view ?? "")
@@ -97,6 +102,7 @@ export function parseExplorerState(source: ParamSource): ExplorerState {
     finding: finding && ID_PATTERN.test(finding) ? finding : null,
     conversation:
       conversation && ID_PATTERN.test(conversation) ? conversation : null,
+    research: research && ID_PATTERN.test(research) ? research : null,
   };
 }
 
@@ -111,6 +117,7 @@ export function explorerSearchParams(state: ExplorerState): URLSearchParams {
   if (state.run) params.set("run", state.run);
   if (state.finding) params.set("finding", state.finding);
   if (state.conversation) params.set("conversation", state.conversation);
+  if (state.research) params.set("research", state.research);
   return params;
 }
 

@@ -33,7 +33,11 @@ describe("assistant security boundaries", () => {
     const users = [...walk(join(root, "features")), ...walk(join(root, "lib")), ...walk(join(root, "app"))].filter(
       (f) => readFileSync(f, "utf8").includes("GEMINI_API_KEY"),
     );
-    expect(users.map((f) => f.slice(root.length + 1)).sort()).toEqual([
+    // Normalise Windows path separators so the check is platform independent.
+    const relative = users
+      .map((f) => f.slice(root.length + 1).split("\\").join("/"))
+      .sort();
+    expect(relative).toEqual([
       "features/ai/providers/provider-factory.ts",
     ]);
   });

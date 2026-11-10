@@ -5,7 +5,7 @@
 // limits) and the mapping of returned rows. They do not run SQL.
 import { describe, expect, it } from "vitest";
 
-import { AnalysisError } from "@/lib/analysis/analysis.errors";
+import { AnalysisError } from "../../../lib/analysis/analysis.errors";
 import {
   getAnalysisStats,
   getAnalysisTree,

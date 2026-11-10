@@ -9,8 +9,8 @@ import {
   filterEntries,
   flattenVisible,
   type TreeFileEntry,
-} from "@/features/explorer/tree/file-tree";
-import { scrollTopForIndex, visibleWindow } from "@/features/explorer/virtual";
+} from "../../../features/explorer/tree/file-tree";
+import { scrollTopForIndex, visibleWindow } from "../../../features/explorer/virtual";
 
 function entry(path: string, over: Partial<TreeFileEntry> = {}): TreeFileEntry {
   return {

@@ -73,6 +73,9 @@ model User {
   aiConversations AIConversation[]
   aiUsageDays     AIUsageDay[]
   aiUsageRecords  AIUsageRecord[]
+  researchRuns    ResearchRun[]
+  researchSources ResearchSource[]
+  researchUsage   ResearchUsageDay[]
   sessions        Session[]
   accounts        Account[]
 
@@ -112,6 +115,7 @@ model Repository {
   findingsRuns    FindingsRun[]
   findingReviews  FindingReview[]
   aiConversations AIConversation[]
+  researchRuns    ResearchRun[]
 
   @@unique([ownerId, fullName])
   @@unique([ownerId, githubId])
@@ -942,4 +946,172 @@ model AIUsageRecord {
 
   @@index([userId, createdAt])
   @@index([conversationId])
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 07 - Research engine
+//
+// A ResearchRun is immutable once synthesised: its sources, passages and
+// recommendation text never change. Only user-managed fields change afterwards
+// (title, archive, recommendation status and note). Source reuse never mutates
+// a past run: each run keeps its own link rows with the record as it was
+// retrieved, while ResearchSource is an owner-scoped cache.
+// ---------------------------------------------------------------------------
+
+enum ResearchRunStatus {
+  DISCOVERING
+  AWAITING_REVIEW
+  SYNTHESIZING
+  COMPLETED
+  FAILED
+}
+
+enum ResearchTrigger {
+  FINDING
+  QUESTION
+}
+
+enum RecommendationStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  IMPLEMENTED
+  ARCHIVED
+}
+
+model ResearchRun {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  /// Provenance: the exact snapshot/analysis the repository evidence came from.
+  snapshotId    String
+  analysisId    String
+  commitSha     String
+  findingsRunId String?
+
+  trigger            ResearchTrigger
+  /// Finding provenance (fingerprint is stable across runs).
+  findingId          String?
+  findingFingerprint String?
+  ruleId             String?
+  /// The question researched (finding-derived text or the user's own words).
+  question           String
+
+  title  String
+  status ResearchRunStatus @default(DISCOVERING)
+
+  queries     Json
+  diagnostics Json?
+  discarded   Json?
+  partial     Boolean @default(false)
+
+  engineVersion String
+
+  /// Validated synthesis (summary, conflicts, limitations, counters).
+  synthesis Json?
+  provider  String?
+  model     String?
+  totalTokens Int?
+  errorCode String?
+
+  /// Single-flight guard for discovery and synthesis.
+  busyUntil  DateTime?
+  archivedAt DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  sources         ResearchRunSource[]
+  recommendations ResearchRecommendation[]
+
+  @@index([userId, repositoryId, archivedAt, createdAt])
+  @@index([userId, findingFingerprint])
+}
+
+model ResearchRunSource {
+  id    String      @id @default(cuid())
+  runId String
+  run   ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  sourceKey String
+  position  Int
+
+  /// Snapshot of the source record, evaluation and passages as retrieved for THIS run.
+  record        Json
+  evaluation    Json
+  passages      Json
+  queryOrdinals Json
+  reused        Boolean @default(false)
+
+  /// The user's review decision. Editable only while the run awaits review.
+  included Boolean @default(true)
+
+  @@unique([runId, sourceKey])
+  @@index([runId, position])
+}
+
+model ResearchRecommendation {
+  id    String      @id @default(cuid())
+  runId String
+  run   ResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  ordinal Int
+  title   String
+  concise String
+  detail  String
+  /// REPOSITORY_AND_RESEARCH | GENERAL_GUIDANCE
+  basis   String
+
+  repositoryCitations Json
+  sourceCitations     Json
+
+  status          RecommendationStatus @default(PROPOSED)
+  note            String?
+  statusChangedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([runId, ordinal])
+  @@index([runId, status])
+}
+
+/// Owner-scoped reuse cache. Holds only the record (metadata + short excerpt),
+/// never full text, and never another user's data.
+model ResearchSource {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceKey    String
+  canonicalUrl String
+  record       Json
+
+  retrievedAt DateTime
+  expiresAt   DateTime
+
+  @@unique([userId, sourceKey])
+  @@index([userId, canonicalUrl])
+}
+
+model ResearchUsageDay {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    String
+
+  runCount             Int @default(0)
+  synthesisCount       Int @default(0)
+  tokenCount           Int @default(0)
+  providerRequestCount Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, day])
 }

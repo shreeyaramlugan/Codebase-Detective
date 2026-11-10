@@ -17,6 +17,7 @@ import CodeSearch from "./CodeSearch";
 import DependencyGraph from "./DependencyGraph";
 import FileExplorer from "./FileExplorer";
 import AssistantPanel from "@/components/ai/AssistantPanel";
+import ResearchPanel from "@/components/research/ResearchPanel";
 import FindingsPanel from "@/components/findings/FindingsPanel";
 import OverviewPanel from "./OverviewPanel";
 import SymbolExplorer from "./SymbolExplorer";
@@ -36,6 +37,7 @@ const LABELS: Record<ExplorerView, string> = {
   search: "Search",
   findings: "Findings",
   assistant: "Assistant",
+  research: "Research",
 };
 
 export default function ExplorerWorkspace({
@@ -321,6 +323,15 @@ export default function ExplorerWorkspace({
 
           {explorable && view === "assistant" && (
             <AssistantPanel
+              repositoryId={repositoryId}
+              analysisId={analysisId!}
+              state={state}
+              onNavigate={navigate}
+            />
+          )}
+
+          {explorable && view === "research" && (
+            <ResearchPanel
               repositoryId={repositoryId}
               analysisId={analysisId!}
               state={state}

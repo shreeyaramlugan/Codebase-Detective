@@ -754,3 +754,100 @@ The project is ready to proceed to Sprint 07 — Research Engine, subject to the
 The next sprint will introduce a hybrid research engine combining official technical documentation and scholarly sources to support research-backed recommendations.
 
 Research outputs will complement the deterministic findings and source-grounded AI investigation capabilities established in earlier sprints.
+### Sprint 07 — Research Engine
+
+**Status: Complete**
+
+Implemented the hybrid Research Engine, extending Codebase Detective's deterministic findings and source-grounded AI investigation capabilities with external technical research and research-backed recommendations.
+
+The engine combines official technical documentation with scholarly publications to investigate identified codebase issues and technical questions. It supports research through official documentation sources, Crossref and OpenAlex, while preserving source provenance, publication information, evidence and citation traceability.
+
+Research discovery and recommendation generation are separate stages. Users can review collected sources before initiating recommendation generation. The engine combines approved research evidence with repository findings and codebase evidence to produce concise summaries and detailed technical recommendations.
+
+**### Delivered**
+
+- Hybrid research architecture combining official technical documentation and scholarly research.
+- Official documentation research provider integration.
+- Crossref scholarly publication discovery.
+- OpenAlex scholarly publication discovery.
+- Provider-independent research retrieval architecture.
+- Official documentation discovery using available APIs, structured feeds and search-based retrieval.
+- Scholarly publication metadata and abstract retrieval.
+- Retrieval of openly accessible full text where permitted.
+- Source normalisation and metadata preservation.
+- Canonical URL and external identifier handling.
+- Duplicate source detection and source reuse.
+- Publication classification, including peer-reviewed publications, preprints and other scholarly material.
+- Explicit identification of metadata-only, abstract-only and full-text source availability.
+- Research query generation from supported deterministic findings.
+- Manual technical research questions.
+- Finding-based and repository-contextual research workflows.
+- User-initiated research execution.
+- Separation of source discovery and recommendation generation.
+- Reviewable source collections before recommendation generation.
+- Research evidence extraction and management.
+- Source relevance and quality evaluation.
+- Preservation of publisher, author, publication date, source type and retrieval metadata where available.
+- Identification and disclosure of outdated or conflicting sources.
+- Integration with the existing Google Gemini AI provider.
+- Research synthesis combining deterministic findings, repository evidence and approved external research.
+- Concise recommendation summaries.
+- Detailed technical recommendations with supporting evidence.
+- Recommendation rationale, expected benefits, trade-offs and implementation considerations.
+- Repository and external research citation support.
+- Citation and evidence validation to prevent unsupported claims.
+- Immutable research runs preserving historical research results.
+- Reusable research sources across separate research runs.
+- Persistent research history.
+- Recommendation saving and renaming.
+- Recommendation acceptance and rejection.
+- Recommendation archiving and restoration.
+- Recommendation implementation-status tracking.
+- Research overview dashboard and research history.
+- Separate official documentation and scholarly source lists.
+- Source evidence panel and detailed research reports.
+- Per-request research limits.
+- Daily user-level research limits.
+- Provider rate-limit handling.
+- Configurable source retrieval limits.
+- Request timeouts and provider failure handling.
+- Repository ownership and research access enforcement.
+- Protection against external-source prompt injection.
+- Handling of unavailable sources, incomplete research and insufficient evidence.
+- Updated technical documentation and README.
+
+**### Architecture and implementation decisions**
+
+| Area | Decision |
+|---|---|
+| Research providers | Official documentation, Crossref and OpenAlex |
+| Documentation retrieval | Hybrid APIs, structured feeds, search discovery and public-page retrieval |
+| Scholarly retrieval | Metadata, abstracts and permitted open-access full text |
+| Research scope | Supported deterministic findings and manual research questions |
+| Research execution | User-initiated, with source review before synthesis |
+| Source quality | Prioritise official documentation and peer-reviewed research |
+| Recommendations | Concise summaries and detailed technical recommendations |
+| Recommendation management | Save, rename, archive, accept, reject and mark as implemented |
+| Research history | Reusable sources with immutable research runs |
+| Usage controls | Per-request, daily user, provider and configurable source limits |
+| Interface | Overview dashboard, separate source lists, evidence panel and detailed research reports |
+
+**### Research integrity and limitations**
+
+Research recommendations are grounded in retrieved repository evidence and external sources. The engine preserves the distinction between deterministic findings, repository evidence and external research.
+
+Preprints and other scholarly material are labelled appropriately rather than presented as peer-reviewed research. Recommendations must disclose limitations where only metadata or abstracts are available. Conflicting, outdated or unavailable sources must not be represented as verified supporting evidence.
+
+Marking a recommendation as implemented records the user's status update; it does not independently verify that the corresponding code change has been made or tested.
+
+The research engine does not replace the deterministic findings engine or the AI Investigation Assistant. It extends them with externally sourced technical knowledge and research-backed recommendations.
+
+**### Completion decision**
+
+Sprint 07 acceptance criteria are satisfied. Codebase Detective now extends beyond repository analysis and AI-assisted investigation to support research-backed technical recommendations.
+
+Users can initiate research from supported deterministic findings or submit their own technical questions, review discovered official and scholarly sources, and generate recommendations grounded in both repository evidence and external research.
+
+Research runs preserve their history, sources remain reusable, and recommendations can be managed throughout their lifecycle. Citation validation, source provenance, usage controls and research-integrity safeguards help ensure that recommendations remain traceable and evidence-based.
+
+The project is ready to proceed to Sprint 08 — Production Worker and Infrastructure, subject to the normal project-level review and version-control checkpoint.

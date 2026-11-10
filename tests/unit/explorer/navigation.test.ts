@@ -24,6 +24,7 @@ describe("explorer URL state", () => {
       run: "run_1",
       finding: "fr_1",
       conversation: "c_1",
+      research: "rr_1",
     });
     const query = new URL(href, "http://x").searchParams;
     expect(parseExplorerState(query)).toEqual({
@@ -36,6 +37,7 @@ describe("explorer URL state", () => {
       run: "run_1",
       finding: "fr_1",
       conversation: "c_1",
+      research: "rr_1",
     });
   });
 
