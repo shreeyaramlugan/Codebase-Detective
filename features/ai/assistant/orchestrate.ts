@@ -16,7 +16,7 @@ import type {
   RetrievalSummary,
   SnapshotScope,
 } from "./contracts";
-import { buildUserPrompt, SYSTEM_PROMPT } from "./prompt";
+import { ANSWER_RESPONSE_SCHEMA, buildUserPrompt, SYSTEM_PROMPT } from "./prompt";
 import type { QuestionCategory } from "./question";
 
 export interface ProduceAnswerInput {
@@ -75,6 +75,7 @@ export async function produceAnswer(
     maxOutputTokens: input.limits.maxOutputTokens,
     timeoutMs: input.limits.requestTimeoutMs,
     responseFormat: "json",
+    responseSchema: ANSWER_RESPONSE_SCHEMA as unknown as Record<string, unknown>,
   });
 
   let raw;

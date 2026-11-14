@@ -250,182 +250,128 @@ The mock AI configuration is a development placeholder. It does not represent a 
 Generate a secure authentication secret rather than using the example value.
 
 ---
+## Quick Start
 
-## Database Setup
+ThreatWeaver is developed locally using Windows, PowerShell and Docker Desktop.
 
-The project uses Prisma with PostgreSQL.
+### Prerequisites
 
-Prisma schema:
+Install the following:
 
-```text
-prisma/schema.prisma
+| Tool | Requirement |
+|---|---|
+| Git | Installed |
+| Python | 3.13.x |
+| Node.js | 22.x |
+| npm | 11.x |
+| Docker Desktop | Installed and running |
+| Docker Compose | Available through Docker Desktop |
+
+### 1. Configure Environment Variables
+
+Create the local environment file:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
-Useful commands:
+If `.env` already exists, do not overwrite it.
 
-```bash
-npx prisma validate
-npx prisma generate
-npx prisma migrate dev
-npx prisma migrate status
+Configure the PostgreSQL password in `.env`.
+
+See [Environment Setup](docs/environment_setup.md) for configuration and security requirements.
+
+### 2. Start PostgreSQL
+
+From the repository root:
+
+```powershell
+docker compose up -d
 ```
 
-The current data model includes repository and indexing-job management, alongside authentication-related records.
+Check the database container:
 
-Database changes should be made through Prisma schema updates and migrations.
-
----
-
-## Development Commands
-
-| Command                 | Description                        |
-| ----------------------- | ---------------------------------- |
-| `npm run dev`           | Start Next.js development server   |
-| `npm run build`         | Create production build            |
-| `npm start`             | Start production server            |
-| `npm run lint`          | Run ESLint                         |
-| `npm run typecheck`     | Run TypeScript checks              |
-| `npm test`              | Run Vitest tests                   |
-| `npm run test:watch`    | Run tests in watch mode            |
-| `npm run test:coverage` | Generate test coverage             |
-| `npm run format`        | Format project files               |
-| `npm run format:check`  | Check formatting                   |
-| `npm run jobs:process`  | Run development indexing processor |
-
----
-
-## Indexing Job Processing
-
-Sprint 01 introduces a durable job lifecycle.
-
-### Job lifecycle
-
-```text
-Repository Submitted
-        |
-        v
-      PENDING
-        |
-        v
-    PROCESSING
-        |
-        +----------+
-        |          |
-        v          v
-   COMPLETED     FAILED
-                   |
-                   v
-             Retry Eligible?
-                /     \
-              Yes      No
-               |        |
-               v        v
-            PENDING   Terminal
+```powershell
+docker compose ps
 ```
 
-### Development processor
+Wait for the PostgreSQL health status to report `healthy`.
 
-Run:
+### 3. Start the Backend
 
-```bash
-npm run jobs:process
+Create and activate the Python virtual environment:
+
+```powershell
+py -m venv backend\.venv
+.\backend\.venv\Scripts\Activate.ps1
 ```
 
-The processor:
+Install development dependencies:
 
-1. Finds eligible pending indexing jobs.
-2. Attempts to claim each job.
-3. Validates stored repository metadata.
-4. Simulates successful metadata indexing.
-5. Updates job and repository status.
-6. Records failures and retry eligibility.
-
-**Important:** This is not yet a source-code indexing engine. It does not clone repositories, download source files, execute repository code or perform AST analysis.
-
-The processor is development-only and is blocked in production environments.
-
-A persistent worker with resource controls is planned for Sprint 08.
-
----
-
-## Testing
-
-Run the complete Vitest suite:
-
-```bash
-npm test
+```powershell
+python -m pip install -r backend\requirements-dev.txt
 ```
 
-Run a specific integration test:
+Start the FastAPI development server:
 
-```bash
-npx vitest run tests/integration/jobs/job-lifecycle.test.ts
+```powershell
+python -m uvicorn app.main:app --app-dir backend --reload
 ```
 
-Run TypeScript checks:
+Backend: `http://127.0.0.1:8000`
 
-```bash
-npm run typecheck
+API documentation: `http://127.0.0.1:8000/docs`
+
+Health check: `http://127.0.0.1:8000/health`
+
+See [Backend Setup](docs/backend_setup.md) for detailed instructions.
+
+### 4. Start the Frontend
+
+Open a separate PowerShell terminal:
+
+```powershell
+cd frontend
+npm ci
+npm run dev
 ```
 
-Run ESLint:
+Frontend: `http://localhost:3000`
 
-```bash
-npm run lint
+See [Frontend Setup](docs/frontend_setup.md) for detailed instructions.
+
+### 5. Stop Development Services
+
+Stop the frontend and backend servers using `CTRL + C` in their respective terminals.
+
+Stop PostgreSQL:
+
+```powershell
+docker compose stop
 ```
 
-Run a production build:
+To stop and remove the PostgreSQL container and Compose network:
 
-```bash
-npm run build
+```powershell
+docker compose down
 ```
 
-Sprint 01 integration tests cover job creation, lifecycle transitions, retry eligibility, attempt limits and concurrent job claiming.
+The named PostgreSQL volume is retained.
 
----
+**Warning:** Do not use `docker compose down -v` unless you deliberately intend to delete the database volume and its data.
 
-## Project Structure
+## Additional Documentation
 
-```text
-codebase-detective/
-|
-+-- app/
-|   +-- api/
-|   |   +-- auth/
-|   |   +-- health/
-|   |   +-- jobs/
-|   |   +-- repositories/
-|   |
-|   +-- auth/
-|   +-- dashboard/
-|
-+-- components/
-|   +-- dashboard/
-|
-+-- lib/
-|   +-- auth/
-|   +-- db/
-|   +-- jobs/
-|
-+-- prisma/
-|   +-- schema.prisma
-|   +-- migrations/
-|
-+-- scripts/
-|   +-- process-indexing-jobs.ts
-|
-+-- tests/
-|   +-- integration/
-|
-+-- .env.example
-+-- package.json
-+-- tsconfig.json
-+-- vitest.config.ts
-```
-
-The structure will evolve as additional modules are introduced.
-
----
+| Document | Description |
+|---|---|
+| [Environment Setup](docs/environment_setup.md) | Environment variables and secrets management |
+| [Backend Setup](docs/backend_setup.md) | Python, FastAPI and backend development |
+| [Frontend Setup](docs/frontend_setup.md) | Next.js and frontend development |
+| [Sprint Planning](docs/sprint%20planning/) | Sprint specifications |
+| [Software Requirements](docs/SRS/) | Software Requirements Specification |
+| [System Architecture](docs/System%20Architecture%20and%20Tech/) | Architecture and technical decisions |
+| [Decision Log](docs/decision_log.md) | Project decision history |
+| [Roadmap](roadmap.md) | Project development roadmap |
 
 ## Development Roadmap
 

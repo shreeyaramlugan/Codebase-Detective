@@ -1,7 +1,7 @@
 // components/research/ResearchPanel.tsx
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { citationHref } from "@/features/ai/assistant/view";
 import type { Citation } from "@/features/ai/assistant/contracts";
@@ -109,7 +109,7 @@ export default function ResearchPanel({ repositoryId, analysisId, state, onNavig
 
   const start = useCallback(
     async (body: Record<string, unknown>) => {
-      setBusy("Searching official documentation and scholarly sources...");
+      setBusy("Starting research...");
       setError(null);
       try {
         const result = (await send(
@@ -287,11 +287,37 @@ function RunView({
     [reload, onChanged],
   );
 
+  // Discovery and synthesis run in the background worker. Poll quietly (no
+  // spinner) and reload the view once the run leaves the in-flight state.
+  const liveStatus = data?.run.status;
+  useEffect(() => {
+    if (liveStatus !== "DISCOVERING" && liveStatus !== "SYNTHESIZING") return;
+    let stopped = false;
+    const timer = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/research/runs/${encodeURIComponent(runId)}`, { credentials: "same-origin" });
+        if (!response.ok) return;
+        const body = (await response.json()) as RunDetail;
+        if (!stopped && body.run.status !== liveStatus) {
+          reload();
+          onChanged();
+        }
+      } catch {
+        // Transient network error: try again on the next tick.
+      }
+    }, 3000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [liveStatus, runId, reload, onChanged]);
+
   if (loading) return <Panel><Spinner label="Loading research..." /></Panel>;
   if (error) return <Panel><ErrorBox message={error} onRetry={reload} /></Panel>;
   if (!data) return null;
 
   const { run, sources, recommendations } = data;
+  const inFlight = run.status === "DISCOVERING" || run.status === "SYNTHESIZING";
   const reviewing = run.status === "AWAITING_REVIEW";
   const official = sources.filter((s) => s.kind === "OFFICIAL_DOCUMENTATION");
   const scholarly = sources.filter((s) => s.kind === "SCHOLARLY");
@@ -304,6 +330,13 @@ function RunView({
 
   return (
     <div className="space-y-4">
+      {inFlight && (
+        <div role="status" className="rounded-xl border border-stone-800 bg-stone-950/40 p-3 text-sm text-stone-300">
+          {run.status === "DISCOVERING"
+            ? "Searching official documentation and scholarly sources in the background. This page updates when it finishes."
+            : "Writing recommendations in the background. This page updates when it finishes."}
+        </div>
+      )}
       <Panel
         title={
           <span className="flex flex-wrap items-center gap-2">

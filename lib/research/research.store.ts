@@ -116,7 +116,8 @@ export interface ResearchStore {
   /** Owned finding (via its repository). */
   findFinding(userId: string, findingId: string): Promise<ResearchFinding | null>;
 
-  createRun(draft: RunDraft, lockUntil: Date): Promise<RunRow>;
+  /** `lockUntil` null leaves the run unlocked (background path). */
+  createRun(draft: RunDraft, lockUntil: Date | null): Promise<RunRow>;
   findRun(userId: string, runId: string): Promise<RunRow | null>;
   listRuns(
     userId: string,
@@ -150,6 +151,10 @@ export interface ResearchStore {
     },
   ): Promise<void>;
   failRun(runId: string, errorCode: string): Promise<void>;
+  /** Atomic AWAITING_REVIEW -> SYNTHESIZING. False when the run is in any other state. */
+  markSynthesizing(runId: string, now: Date): Promise<boolean>;
+  /** SYNTHESIZING -> AWAITING_REVIEW after a final synthesis failure; records the code. */
+  reopenReview(runId: string, errorCode: string): Promise<void>;
   listRunSources(userId: string, runId: string): Promise<RunSourceRow[]>;
   /** Only effective while the run is AWAITING_REVIEW. Returns false otherwise. */
   setIncluded(userId: string, runId: string, included: Record<string, boolean>): Promise<boolean>;

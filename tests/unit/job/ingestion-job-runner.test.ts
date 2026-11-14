@@ -134,6 +134,9 @@ describe("processIndexingJob", () => {
       kind: "FAILED",
       jobId: "job-1",
       code: "NO_USABLE_SOURCE_FILES",
+      causeCode: undefined,
+      // Fixed, content-free message kept only for the worker's log line.
+      detail: "No usable files",
     });
     // The ingestion service records the job failure itself.
     expect(mocks.failJob).not.toHaveBeenCalled();

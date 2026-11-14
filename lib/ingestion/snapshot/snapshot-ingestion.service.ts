@@ -42,6 +42,7 @@ function getSafeErrorDetails(error: unknown): {
   code: string;
   message: string;
   retryable: boolean;
+  retryAfterMs?: number;
 } {
   if (error instanceof SnapshotIngestionError) {
     return {
@@ -56,6 +57,11 @@ function getSafeErrorDetails(error: unknown): {
       code: error.code,
       message: "GitHub could not provide one or more repository files.",
       retryable: error.retryable,
+      // Let the queue wait for the rate-limit window instead of burning attempts.
+      retryAfterMs:
+        error.retryAfterSeconds !== undefined
+          ? error.retryAfterSeconds * 1000
+          : undefined,
     };
   }
 
@@ -570,7 +576,10 @@ export async function ingestRepositorySnapshot(
     const details = getSafeErrorDetails(error);
 
     try {
-      await failIndexingJob(request.jobId, details.code, details.message);
+      await failIndexingJob(request.jobId, details.code, details.message, {
+        retryable: details.retryable,
+        retryAfterMs: details.retryAfterMs,
+      });
     } catch {
       // The job may already have transitioned. Do not mask the original error.
     }

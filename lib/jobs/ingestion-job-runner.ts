@@ -1,4 +1,6 @@
 // lib/jobs/ingestion-job-runner.ts
+import type { IndexingJob } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma";
 import { ingestRepositorySnapshot } from "@/lib/ingestion/snapshot/snapshot-ingestion.service";
 import { SnapshotIngestionError } from "@/lib/ingestion/snapshot/snapshot.errors";
@@ -16,6 +18,10 @@ export type IndexingJobOutcome =
       kind: "FAILED";
       jobId: string;
       code: string;
+      /** Safe underlying GitHub code (for example RATE_LIMITED), for logs. */
+      causeCode?: string;
+      /** Fixed, content-free message of the ingestion error (safe to log). */
+      detail?: string;
     }
   | {
       kind: "SKIPPED";
@@ -86,6 +92,17 @@ export async function processIndexingJob(
     throw error;
   }
 
+  return runIngestionForClaimedJob(job);
+}
+
+/**
+ * Ingest for a job that is already claimed (PROCESSING). Used by
+ * processIndexingJob after its own claim and by the production worker, whose
+ * queue claims atomically before handing the job over.
+ */
+export async function runIngestionForClaimedJob(
+  job: Pick<IndexingJob, "id" | "repositoryId" | "targetCommitSha">,
+): Promise<IndexingJobOutcome> {
   const repository = await prisma.repository.findUnique({
     where: { id: job.repositoryId },
     select: {
@@ -131,6 +148,20 @@ export async function processIndexingJob(
         ? error.code
         : "FILE_INGESTION_FAILED";
 
-    return { kind: "FAILED", jobId: job.id, code };
+    const rawCause =
+      error instanceof SnapshotIngestionError &&
+      error.cause &&
+      typeof (error.cause as { code?: unknown }).code === "string"
+        ? (error.cause as { code: string }).code
+        : undefined;
+    const causeCode =
+      rawCause && /^[A-Z0-9_]{1,64}$/.test(rawCause) ? rawCause : undefined;
+
+    const detail =
+      error instanceof SnapshotIngestionError
+        ? error.message.slice(0, 200)
+        : undefined;
+
+    return { kind: "FAILED", jobId: job.id, code, causeCode, detail };
   }
 }

@@ -76,3 +76,40 @@ export function buildUserPrompt(
 
   return `${header}\n\n${blocks.join("\n\n")}\n\n<<<QUESTION>>>\n${neutralise(question)}\n<<<END QUESTION>>>`;
 }
+
+
+/**
+ * Enforced by the provider so the answer always has the required fields.
+ * The strict parser and citation validation still run on whatever comes back.
+ */
+export const ANSWER_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    answerable: { type: "BOOLEAN" },
+    sections: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          type: { type: "STRING", enum: ["fact", "inference", "uncertainty"] },
+          text: { type: "STRING" },
+          citations: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                evidence: { type: "STRING" },
+                startLine: { type: "INTEGER" },
+                endLine: { type: "INTEGER" },
+              },
+              required: ["evidence"],
+            },
+          },
+        },
+        required: ["type", "text", "citations"],
+      },
+    },
+    limitations: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["answerable", "sections", "limitations"],
+} as const;

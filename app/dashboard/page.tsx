@@ -8,6 +8,7 @@ import RecentActivity from "@/components/dashboard/RecentActivity";
 import RepositorySubmission from "@/components/dashboard/RepositorySubmission";
 
 import { prisma } from "@/lib/db/prisma";
+import { jobDisplayState } from "@/lib/jobs/job-types";
 import { getCurrentSession } from "@/lib/auth/session";
 import { toSnapshotSummaryView } from "@/lib/ingestion/source-content/source-content.service";
 
@@ -24,6 +25,9 @@ async function DashboardContent() {
     },
     include: {
       indexingJobs: {
+        // Only ingestion jobs describe repository indexing; analysis, findings
+        // and research jobs are tracked separately.
+        where: { type: "REPOSITORY_INDEX" },
         orderBy: {
           createdAt: "desc",
         },
@@ -38,6 +42,15 @@ async function DashboardContent() {
     },
     orderBy: {
       createdAt: "desc",
+    },
+  });
+
+  // Every queued or running background job of this user's repositories,
+  // whatever its type (ingestion, analysis, findings, research).
+  const activeJobs = await prisma.indexingJob.count({
+    where: {
+      repository: { ownerId: session.user.id },
+      status: { in: ["PENDING", "PROCESSING"] },
     },
   });
 
@@ -98,6 +111,7 @@ async function DashboardContent() {
         ? {
             id: latestJob.id,
             status: latestJob.status,
+            state: jobDisplayState(latestJob),
             attempts: latestJob.attempts,
             maxAttempts: latestJob.maxAttempts,
             errorCode: latestJob.errorCode,
@@ -108,12 +122,6 @@ async function DashboardContent() {
         : null,
     };
   });
-
-  const activeJobs = repositories.filter(
-    (repository) =>
-      repository.latestJob?.status === "PENDING" ||
-      repository.latestJob?.status === "PROCESSING",
-  ).length;
 
   const completedAnalyses = repositories.filter(
     (repository) =>

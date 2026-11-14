@@ -158,6 +158,21 @@ export const prismaResearchStore: ResearchStore = {
     ]);
   },
 
+  async markSynthesizing(runId) {
+    const result = await prisma.researchRun.updateMany({
+      where: { id: runId, status: "AWAITING_REVIEW" },
+      data: { status: "SYNTHESIZING", errorCode: null },
+    });
+    return result.count === 1;
+  },
+
+  async reopenReview(runId, errorCode) {
+    await prisma.researchRun.updateMany({
+      where: { id: runId, status: "SYNTHESIZING" },
+      data: { status: "AWAITING_REVIEW", errorCode, busyUntil: null },
+    });
+  },
+
   async failRun(runId, errorCode) {
     await prisma.researchRun.updateMany({
       where: { id: runId, status: { in: ["DISCOVERING", "SYNTHESIZING"] } },

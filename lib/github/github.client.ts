@@ -1,3 +1,4 @@
+// lib/github/github.client.ts
 import { GitHubApiError } from "./github.errors";
 import type {
   GitHubBlob,
@@ -36,6 +37,12 @@ interface GitHubApiCommit {
   sha: string;
 }
 
+function githubAuthHeader(): Record<string, string> {
+  const token = process.env.GITHUB_TOKEN?.trim();
+
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function githubFetch<T>(path: string): Promise<T> {
   let response: Response;
 
@@ -46,6 +53,9 @@ async function githubFetch<T>(path: string): Promise<T> {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": API_VERSION,
         "User-Agent": "Codebase-Detective",
+        // Optional. Raises GitHub's limit from 60 to 5,000 requests/hour.
+        // Never logged or returned to clients.
+        ...githubAuthHeader(),
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       cache: "no-store",

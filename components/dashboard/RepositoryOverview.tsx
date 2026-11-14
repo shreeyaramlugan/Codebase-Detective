@@ -34,6 +34,7 @@ export type Repository = {
     errorMessage: string | null;
     nextRetryAt: string | null;
     retryAvailable: boolean;
+    state?: "QUEUED" | "RUNNING" | "COMPLETED" | "RETRY_SCHEDULED" | "FAILED";
   } | null;
 };
 
@@ -163,7 +164,11 @@ export default function RepositoryOverview({
 
                   <p className="mt-2 text-sm text-stone-300">
                     {job
-                      ? job.status.toLowerCase()
+                      ? job.state === "QUEUED"
+                        ? "Waiting for a worker"
+                        : job.state === "RETRY_SCHEDULED"
+                          ? "Failed, will retry automatically"
+                          : job.status.toLowerCase()
                       : "No indexing job recorded"}
                   </p>
 
@@ -179,7 +184,7 @@ export default function RepositoryOverview({
                         </p>
                       ) : job.nextRetryAt ? (
                         <p className="mt-2 text-xs text-stone-500">
-                          Retry available: {formatDate(job.nextRetryAt)}
+                          Next automatic retry: {formatDate(job.nextRetryAt)}
                         </p>
                       ) : null}
 

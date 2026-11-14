@@ -333,6 +333,7 @@ describe("ingestRepositorySnapshot", () => {
       request.jobId,
       "TREE_RETRIEVAL_FAILED",
       "GitHub rate limits prevented repository ingestion.",
+      expect.objectContaining({ retryable: true }),
     );
 
     expect(mocks.completeJob).not.toHaveBeenCalled();
@@ -380,6 +381,7 @@ describe("ingestRepositorySnapshot", () => {
       request.jobId,
       "NO_USABLE_SOURCE_FILES",
       "No usable source files could be stored for this repository snapshot.",
+      expect.objectContaining({ retryable: false }),
     );
   });
 

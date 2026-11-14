@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireSession: vi.fn(),
   start: vi.fn(),
+  enqueue: vi.fn(),
+  dispatch: vi.fn(),
   runs: vi.fn(),
   repoRuns: vi.fn(),
   run: vi.fn(),
@@ -25,6 +27,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireSession: mocks.requireSession }));
+// Findings generation now runs in the background worker: the route only enqueues a job.
+vi.mock("@/lib/jobs/job-enqueue-pipeline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jobs/job-enqueue-pipeline")>()),
+  enqueueFindingsJob: mocks.enqueue,
+}));
+vi.mock("@/lib/jobs/dispatch", () => ({ dispatchJob: mocks.dispatch }));
 vi.mock("@/lib/findings/findings.start", () => ({
   startFindingsRun: mocks.start,
 }));
@@ -59,6 +67,7 @@ import { GET as repoRunsGet } from "../../../app/api/repositories/[repositoryId]
 import { GET as compareGet } from "../../../app/api/repositories/[repositoryId]/findings/compare/route";
 import { GET as historyGet } from "../../../app/api/repositories/[repositoryId]/finding-history/route";
 import { POST as compareSnapshotsPost } from "../../../app/api/snapshots/compare-findings/route";
+import { PipelineEnqueueError } from "../../../lib/jobs/job-enqueue-pipeline";
 import { FindingsError } from "@/lib/findings/findings.errors";
 
 const ana = { params: Promise.resolve({ analysisId: "ana-1" }) };
@@ -108,21 +117,39 @@ describe("findings API routes", () => {
     }
   });
 
-  it("starts a run with the caller's id and returns 201", async () => {
-    mocks.start.mockResolvedValue({
-      runId: "run-1",
-      status: "COMPLETED",
-      errorCode: null,
+  it("queues a findings job with the caller's id and returns 202", async () => {
+    mocks.enqueue.mockResolvedValue({
+      job: {
+        id: "job-1",
+        repositoryId: "repo-1",
+        type: "FINDINGS_GENERATION",
+        status: "PENDING",
+        attempts: 0,
+        maxAttempts: 3,
+        errorCode: null,
+        errorMessage: null,
+        nextRetryAt: null,
+        startedAt: null,
+        completedAt: null,
+        createdAt: new Date("2026-11-10T10:00:00Z"),
+        result: null,
+        lockedBy: "secret-worker",
+      },
+      deduplicated: false,
     });
     const response = await runPost(
       send("POST", { thresholds: { cyclomaticMedium: 20 } }),
       ana,
     );
-    expect(response.status).toBe(201);
-    expect(mocks.start).toHaveBeenCalledWith("user-1", "ana-1", {
+    expect(response.status).toBe(202);
+    expect(mocks.enqueue).toHaveBeenCalledWith("user-1", "ana-1", {
       cyclomaticMedium: 20,
     });
+    expect(mocks.dispatch).toHaveBeenCalledWith("job-1");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    const body = await response.json();
+    expect(body.job.state).toBe("QUEUED");
+    expect(JSON.stringify(body)).not.toContain("secret-worker");
   });
 
   it("rejects malformed ids and bodies before calling a service", async () => {
@@ -134,7 +161,7 @@ describe("findings API routes", () => {
     );
     const badFnd = { params: Promise.resolve({ findingId: "a b" }) };
     expect((await findingGet(get("/x"), badFnd)).status).toBe(400);
-    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.enqueue).not.toHaveBeenCalled();
     expect(mocks.detail).not.toHaveBeenCalled();
   });
 
@@ -173,8 +200,8 @@ describe("findings API routes", () => {
       new FindingsError("Finding not found.", "NOT_FOUND"),
     );
     expect((await findingGet(get("/x"), fnd)).status).toBe(404);
-    mocks.start.mockRejectedValue(
-      new FindingsError("not ready", "ANALYSIS_NOT_READY"),
+    mocks.enqueue.mockRejectedValue(
+      new PipelineEnqueueError("not ready", "ANALYSIS_NOT_READY"),
     );
     expect((await runPost(send("POST", {}), ana)).status).toBe(409);
     mocks.compare.mockRejectedValue(

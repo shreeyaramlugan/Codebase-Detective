@@ -27,7 +27,7 @@ const ACTIVE_JOB_STATUSES = ["PENDING", "PROCESSING"] as const;
  *   indistinguishable from a missing one.
  * - The latest commit is resolved once and stored on the job; ingestion
  *   later uses exactly that SHA.
- * - Only one PENDING/PROCESSING job may exist per repository. The check
+ * - Only one PENDING/PROCESSING ingestion job may exist per repository. The check
  *   and insert run in a serializable transaction so two simultaneous
  *   requests cannot both create a job.
  * - If a snapshot already exists for the commit it is reused by the
@@ -55,6 +55,7 @@ export async function enqueueIngestionJob(input: {
   const activeJob = await prisma.indexingJob.findFirst({
     where: {
       repositoryId: repository.id,
+      type: "REPOSITORY_INDEX",
       status: { in: [...ACTIVE_JOB_STATUSES] },
     },
     select: { id: true },
@@ -91,6 +92,7 @@ export async function enqueueIngestionJob(input: {
         const conflicting = await tx.indexingJob.findFirst({
           where: {
             repositoryId: repository.id,
+            type: "REPOSITORY_INDEX",
             status: { in: [...ACTIVE_JOB_STATUSES] },
           },
           select: { id: true },
@@ -108,6 +110,7 @@ export async function enqueueIngestionJob(input: {
             repositoryId: repository.id,
             type: "REPOSITORY_INDEX",
             status: "PENDING",
+            requestedById: input.ownerId,
             targetCommitSha: commitSha,
           },
         });

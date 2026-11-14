@@ -6,6 +6,14 @@ import type { GitHubCommitReference } from "@/lib/github/github.type";
 import { INGESTION_LIMITS } from "@/lib/ingestion/classification/ingestion-limits";
 import { SnapshotIngestionError } from "./snapshot.errors";
 
+// Remote databases (for example Neon from another region) can take several
+// seconds per round trip, so Prisma's 5 second default aborts large writes
+// such as the file inventory with P2028.
+/** A snapshot untouched for this long is treated as abandoned. */
+const STALE_SNAPSHOT_MS = 10 * 60 * 1000;
+
+const TRANSACTION_OPTIONS = { maxWait: 15_000, timeout: 60_000 } as const;
+
 export interface ClaimSnapshotInput {
   repositoryId: string;
   commit: GitHubCommitReference;
@@ -149,6 +157,43 @@ export async function claimSnapshotForIngestion(
     existing.status === "INGESTING" ||
     existing.status === "RECOVERING"
   ) {
+    // An attempt that died (worker crash, database outage) cannot mark its
+    // snapshot failed, so it would stay in progress forever. The job queue
+    // guarantees one active ingestion job per repository, so a snapshot that
+    // has not changed for a long time is abandoned: reclaim it for recovery.
+    // A live ingestion touches the row constantly, so it is never reclaimed.
+    const staleBefore = new Date(Date.now() - STALE_SNAPSHOT_MS);
+    const reclaimed = await prisma.repositorySnapshot.updateMany({
+      where: {
+        id: existing.id,
+        status: { in: ["DISCOVERING", "INGESTING", "RECOVERING"] },
+        updatedAt: { lt: staleBefore },
+      },
+      data: {
+        treeSha: commit.treeSha,
+        commitMessage: commit.message,
+        commitAuthor: commit.authorName,
+        committedAt: commit.committedAt ? new Date(commit.committedAt) : null,
+        status: "RECOVERING",
+        completeness: null,
+        totalFiles: 0,
+        eligibleFiles: 0,
+        storedFiles: 0,
+        skippedFiles: 0,
+        failedFiles: 0,
+        totalBytes: BigInt(0),
+        startedAt: new Date(),
+        completedAt: null,
+      },
+    });
+
+    if (reclaimed.count === 1) {
+      return {
+        kind: "RECOVERY_REQUIRED",
+        snapshotId: existing.id,
+      };
+    }
+
     throw new SnapshotIngestionError(
       "This repository commit is already being processed.",
       "SNAPSHOT_ALREADY_PROCESSING",
@@ -265,7 +310,7 @@ export async function clearSnapshotFiles(snapshotId: string): Promise<void> {
       await tx.snapshotFile.deleteMany({
         where: { snapshotId },
       });
-    });
+    }, TRANSACTION_OPTIONS);
   } catch (error) {
     if (error instanceof SnapshotIngestionError) {
       throw error;
@@ -343,7 +388,7 @@ export async function completeSnapshotRecovery(
           "SNAPSHOT_CONFLICT",
         );
       }
-    });
+    }, TRANSACTION_OPTIONS);
   } catch (error) {
     if (error instanceof SnapshotIngestionError) {
       throw error;
@@ -539,7 +584,7 @@ export async function persistSnapshotInventory(
           totalBytes: BigInt(0),
         },
       });
-    });
+    }, TRANSACTION_OPTIONS);
   } catch (error) {
     if (error instanceof SnapshotIngestionError) {
       throw error;
@@ -650,7 +695,7 @@ export async function markSnapshotFileStored(
           },
         },
       });
-    });
+    }, TRANSACTION_OPTIONS);
   } catch (error) {
     if (error instanceof SnapshotIngestionError) {
       throw error;
@@ -753,7 +798,7 @@ export async function markSnapshotFileFailed(
           },
         },
       });
-    });
+    }, TRANSACTION_OPTIONS);
   } catch (error) {
     if (error instanceof SnapshotIngestionError) {
       throw error;
@@ -899,7 +944,7 @@ export async function finalizeSnapshot(
           totalBytes,
         },
       };
-    });
+    }, TRANSACTION_OPTIONS);
   } catch (error) {
     if (error instanceof SnapshotIngestionError) {
       throw error;
@@ -976,7 +1021,7 @@ export async function beginFailedFileRetry(
           sizeBytes: true,
         },
       });
-    });
+    }, TRANSACTION_OPTIONS);
 
     if (files === null) {
       const latest = await prisma.repositorySnapshot.findUnique({

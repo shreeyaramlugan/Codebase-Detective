@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { describeJobState, waitForJob } from "@/lib/jobs/job-client";
 import type { ExplorerState } from "@/features/explorer/navigation/explorer-url";
 import {
   FINDING_CATEGORIES,
@@ -140,6 +141,7 @@ export default function FindingsPanel({
   const [tab, setTab] = useState<Tab>("findings");
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [jobNote, setJobNote] = useState<string | null>(null);
 
   const runs = useApi<{ runs: FindingsRunView[] }>(
     `/api/analyses/${encodeURIComponent(analysisId)}/findings/runs`,
@@ -242,15 +244,21 @@ export default function FindingsPanel({
         },
       );
       if (!response.ok) throw new Error(await readApiError(response));
-      const result = (await response.json()) as { runId: string };
+      // The run is produced by a background worker: wait for the job, then open its run.
+      const { job } = (await response.json()) as { job: { id: string } };
+      const finished = await waitForJob(job.id, {
+        onUpdate: (update) => setJobNote(describeJobState(update)),
+      });
+      const result = finished.result as { findingsRunId?: string } | null;
       runs.reload();
-      onNavigate({ run: result.runId, finding: null });
+      if (result?.findingsRunId) onNavigate({ run: result.findingsRunId, finding: null });
     } catch (cause) {
       setStartError(
         cause instanceof Error ? cause.message : "Could not start the run.",
       );
     } finally {
       setStarting(false);
+      setJobNote(null);
     }
   }
 
@@ -315,7 +323,7 @@ export default function FindingsPanel({
             onClick={() => void startRun()}
             className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-stone-950 hover:bg-orange-400 disabled:opacity-60"
           >
-            {starting ? "Running..." : "Run findings analysis"}
+            {starting ? (jobNote ?? "Queuing...") : "Run findings analysis"}
           </button>
         </div>
       </div>

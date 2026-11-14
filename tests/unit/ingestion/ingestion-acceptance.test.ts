@@ -287,6 +287,7 @@ describe("Sprint 02 ingestion acceptance and edge cases", () => {
         request.jobId,
         "NO_USABLE_SOURCE_FILES",
         expect.any(String),
+        expect.objectContaining({ retryable: false }),
       );
       expect(mocks.completeJob).not.toHaveBeenCalled();
     });
@@ -500,6 +501,7 @@ describe("Sprint 02 ingestion acceptance and edge cases", () => {
         request.jobId,
         "SNAPSHOT_ALREADY_PROCESSING",
         expect.any(String),
+        expect.objectContaining({ retryable: true }),
       );
     });
 

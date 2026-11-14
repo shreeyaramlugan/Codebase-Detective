@@ -93,6 +93,8 @@ describe("enqueueIngestionJob", () => {
         repositoryId: "repo-1",
         type: "REPOSITORY_INDEX",
         status: "PENDING",
+        // Recorded so the worker can queue follow-up analysis for the owner.
+        requestedById: "user-1",
         targetCommitSha: SHA,
       },
     });

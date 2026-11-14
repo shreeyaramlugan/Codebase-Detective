@@ -113,7 +113,7 @@ export class FakeResearchStore implements ResearchStore {
     const f = this.findings.find((x) => x.id === findingId);
     return f && this.owners.get(f.repositoryId) === userId ? f : null;
   }
-  async createRun(draft: Parameters<ResearchStore["createRun"]>[0], lockUntil: Date) {
+  async createRun(draft: Parameters<ResearchStore["createRun"]>[0], lockUntil: Date | null) {
     const row: RunRow = {
       ...draft,
       id: this.next("run"),
@@ -182,6 +182,21 @@ export class FakeResearchStore implements ResearchStore {
     r.diagnostics = data.diagnostics;
     r.discarded = data.discarded;
     r.partial = data.partial;
+  }
+  async markSynthesizing(runId: string) {
+    const r = this.runs.find((x) => x.id === runId);
+    if (!r || r.status !== "AWAITING_REVIEW") return false;
+    r.status = "SYNTHESIZING";
+    r.errorCode = null;
+    return true;
+  }
+  async reopenReview(runId: string, errorCode: string) {
+    const r = this.runs.find((x) => x.id === runId);
+    if (r && r.status === "SYNTHESIZING") {
+      r.status = "AWAITING_REVIEW";
+      r.errorCode = errorCode;
+      r.busyUntil = null;
+    }
   }
   async failRun(runId: string, errorCode: string) {
     const r = this.runs.find((x) => x.id === runId)!;

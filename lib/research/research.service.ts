@@ -254,7 +254,19 @@ export interface StartRunInput {
   analysisId?: unknown;
 }
 
-export async function startRun(deps: ResearchDeps, userId: string, repositoryId: string, input: StartRunInput) {
+/**
+ * Validates, reserves quota and creates the run in DISCOVERING. Does not
+ * contact any provider. `lock: true` (synchronous path) holds a short busy lock
+ * for the in-request discovery; the worker path leaves the run unlocked because
+ * the job queue is what provides single ownership.
+ */
+export async function prepareRun(
+  deps: ResearchDeps,
+  userId: string,
+  repositoryId: string,
+  input: StartRunInput,
+  opts: { lock?: boolean } = {},
+): Promise<RunRow> {
   requireId(repositoryId, "repositoryId");
   const { store, limits } = deps;
   if (!(await store.repositoryExists(userId, repositoryId))) {
@@ -310,7 +322,7 @@ export async function startRun(deps: ResearchDeps, userId: string, repositoryId:
   }
 
   const deadline = limits.discoveryDeadlineMs;
-  const run = await store.createRun(
+  return store.createRun(
     {
       userId,
       repositoryId,
@@ -327,9 +339,50 @@ export async function startRun(deps: ResearchDeps, userId: string, repositoryId:
       queries: plans,
       engineVersion: RESEARCH_ENGINE_VERSION,
     },
-    new Date(t.getTime() + deadline + LOCK_SLACK_MS),
+    opts.lock === false ? null : new Date(t.getTime() + deadline + LOCK_SLACK_MS),
   );
+}
 
+export async function startRun(deps: ResearchDeps, userId: string, repositoryId: string, input: StartRunInput) {
+  const run = await prepareRun(deps, userId, repositoryId, input, { lock: true });
+  await executeDiscovery(deps, userId, run, { failRunOnError: true, releaseLock: true });
+  return getRun(deps, userId, run.id);
+}
+
+/**
+ * Worker entry for discovery. Idempotent: a run that already left DISCOVERING
+ * is returned untouched. With `failRunOnError: false` a failure is rethrown
+ * without marking the run FAILED so the queue can retry; call `failRunFinal`
+ * once retries are exhausted.
+ */
+export async function runPreparedDiscovery(
+  deps: ResearchDeps,
+  userId: string,
+  runId: string,
+  opts: { failRunOnError: boolean },
+): Promise<RunRow> {
+  const run = await requireRun(deps, userId, runId);
+  if (run.status !== "DISCOVERING") return run;
+  await executeDiscovery(deps, userId, run, { failRunOnError: opts.failRunOnError, releaseLock: false });
+  return requireRun(deps, userId, runId);
+}
+
+/** Marks a run FAILED after the job queue gave up. Safe to call repeatedly. */
+export async function failRunFinal(deps: ResearchDeps, runId: string, errorCode: string): Promise<void> {
+  await deps.store.failRun(runId, errorCode);
+}
+
+async function executeDiscovery(
+  deps: ResearchDeps,
+  userId: string,
+  run: RunRow,
+  opts: { failRunOnError: boolean; releaseLock: boolean },
+): Promise<void> {
+  const { store, limits } = deps;
+  const plans = run.queries;
+  const t = now(deps);
+  const day = usageDay(t);
+  const deadline = limits.discoveryDeadlineMs;
   try {
     const clock = deps.clock ?? (() => Date.now());
     const out = await runDiscovery({
@@ -377,14 +430,12 @@ export async function startRun(deps: ResearchDeps, userId: string, repositoryId:
       )
       .catch(() => undefined);
   } catch (error) {
-    await store.failRun(run.id, "DISCOVERY_FAILED").catch(() => undefined);
+    if (opts.failRunOnError) await store.failRun(run.id, "DISCOVERY_FAILED").catch(() => undefined);
     if (error instanceof ResearchError) throw error;
     throw new ResearchError("Research could not be completed.", "PROVIDER_ERROR");
   } finally {
-    await store.releaseLock(run.id).catch(() => undefined);
+    if (opts.releaseLock) await store.releaseLock(run.id).catch(() => undefined);
   }
-
-  return getRun(deps, userId, run.id);
 }
 
 export async function listRuns(
@@ -494,116 +545,162 @@ export async function synthesiseRun(deps: ResearchDeps, userId: string, runId: s
       "INVALID_STATE",
     );
   }
-  const { store, limits } = deps;
+  const { store } = deps;
   const t = now(deps);
   const timeoutMs = deps.synthesisTimeoutMs ?? 45_000;
   if (!(await store.acquireLock(run.id, t, new Date(t.getTime() + timeoutMs + LOCK_SLACK_MS), "AWAITING_REVIEW"))) {
     throw new ResearchError("This run is already being processed.", "BUSY", { retryable: true });
   }
-
   try {
-    const scope = await store.resolveScope(userId, run.repositoryId, { analysisId: run.analysisId });
-    if (!scope) throw new ResearchError("The analysis for this run is no longer available.", "CONTEXT_UNAVAILABLE");
-
-    // Only sources the person kept are eligible. Review is the gate.
-    const rows = await store.listRunSources(userId, run.id);
-    const reviewed: EvaluatedSource[] = rows
-      .filter((r) => r.included)
-      .map((r) => ({
-        record: r.record,
-        evaluation: r.evaluation,
-        passages: r.passages,
-        queryOrdinals: r.queryOrdinals,
-        reused: r.reused,
-      }));
-
-    let candidates: EvidenceCandidate[] = [];
-    if (run.trigger === "FINDING" && run.findingId) {
-      const finding = await store.findFinding(userId, run.findingId);
-      if (finding) {
-        candidates = [
-          ...findingCandidates(finding),
-          ...(await sourceCandidate(deps.reader, scope, finding.subjectPath, finding.primaryLine)),
-        ];
-      }
-    } else {
-      candidates = await manualCandidates(deps.reader, scope, run.question);
-    }
-    const repositoryEvidence: EvidenceItem[] = assembleContext(candidates, 8_000).items;
-
-    const day = usageDay(t);
-    const started = Date.now();
-    let provider: string | null = null;
-    let model = "unknown";
-    try {
-      const out = await synthesise({
-        provider: deps.provider(),
-        limits,
-        timeoutMs,
-        question: run.question,
-        scope,
-        repositoryEvidence,
-        sources: reviewed,
-        beforeProvider: async () => {
-          // Reserve before contacting the provider; atomic and race safe.
-          if (!(await store.reserve(userId, day, "synthesisCount", limits.dailySynthesisLimit, limits.dailyTokenLimit))) {
-            throw new ResearchError("The daily research synthesis limit has been reached.", "LIMIT_EXCEEDED", {
-              resetsAt: nextResetAt(t).toISOString(),
-            });
-          }
-        },
-      });
-      provider = out.provider;
-      model = out.model ?? model;
-      if (out.providerCalled) {
-        await store.recordUsage(userId, day, {
-          runId: run.id,
-          provider: out.provider ?? "unknown",
-          model,
-          status: "SUCCEEDED",
-          inputTokens: out.usage?.inputTokens ?? null,
-          outputTokens: out.usage?.outputTokens ?? null,
-          totalTokens: out.usage?.totalTokens ?? null,
-          errorCode: null,
-          durationMs: Date.now() - started,
-        });
-      }
-      const { recommendations, ...synthesis } = out.result;
-      await store.saveSynthesis(run.id, {
-        synthesis,
-        recommendations,
-        provider,
-        model: out.model,
-        totalTokens: out.usage?.totalTokens ?? null,
-      });
-    } catch (error) {
-      if (error instanceof ResearchError) throw error;
-      if (error instanceof AIProviderError) {
-        await store
-          .recordUsage(userId, day, {
-            runId: run.id,
-            provider: "gemini",
-            model,
-            status: "FAILED",
-            inputTokens: null,
-            outputTokens: null,
-            totalTokens: null,
-            errorCode: error.code,
-            durationMs: Date.now() - started,
-          })
-          .catch(() => undefined);
-        throw new ResearchError(
-          error.message,
-          error.code === "NOT_CONFIGURED" ? "NOT_CONFIGURED" : "PROVIDER_ERROR",
-          { status: error.code === "TIMEOUT" ? 504 : undefined, retryable: error.retryable },
-        );
-      }
-      throw error;
-    }
+    await performSynthesis(deps, userId, run);
   } finally {
     await store.releaseLock(run.id).catch(() => undefined);
   }
   return getRun(deps, userId, runId);
+}
+
+/**
+ * Background path, step 1 (request time): atomically moves AWAITING_REVIEW ->
+ * SYNTHESIZING so the sources can no longer be edited and a second request is
+ * rejected. Nothing is sent to a provider here.
+ */
+export async function beginSynthesis(deps: ResearchDeps, userId: string, runId: string): Promise<RunRow> {
+  const run = await requireRun(deps, userId, runId);
+  if (run.status !== "AWAITING_REVIEW") {
+    throw new ResearchError(
+      run.status === "COMPLETED"
+        ? "This research run has already been synthesised."
+        : run.status === "SYNTHESIZING"
+          ? "This run is already being synthesised."
+          : "This run is not ready for synthesis.",
+      run.status === "SYNTHESIZING" ? "BUSY" : "INVALID_STATE",
+      run.status === "SYNTHESIZING" ? { retryable: true } : undefined,
+    );
+  }
+  if (!(await deps.store.markSynthesizing(run.id, now(deps)))) {
+    throw new ResearchError("This run is already being processed.", "BUSY", { retryable: true });
+  }
+  return { ...run, status: "SYNTHESIZING" };
+}
+
+/** Background path, step 2 (worker). Idempotent for runs that already completed. */
+export async function runPreparedSynthesis(deps: ResearchDeps, userId: string, runId: string): Promise<RunRow> {
+  const run = await requireRun(deps, userId, runId);
+  if (run.status === "COMPLETED") return run;
+  if (run.status !== "SYNTHESIZING") {
+    throw new ResearchError("This run is not awaiting synthesis.", "INVALID_STATE");
+  }
+  await performSynthesis(deps, userId, run);
+  return requireRun(deps, userId, runId);
+}
+
+/** Returns a run whose synthesis failed for good to review so it can be retried by the person. */
+export async function reopenReview(deps: ResearchDeps, runId: string, errorCode: string): Promise<void> {
+  await deps.store.reopenReview(runId, errorCode);
+}
+
+async function performSynthesis(deps: ResearchDeps, userId: string, run: RunRow): Promise<void> {
+  const { store, limits } = deps;
+  const t = now(deps);
+  const timeoutMs = deps.synthesisTimeoutMs ?? 45_000;
+  const scope = await store.resolveScope(userId, run.repositoryId, { analysisId: run.analysisId });
+  if (!scope) throw new ResearchError("The analysis for this run is no longer available.", "CONTEXT_UNAVAILABLE");
+
+  // Only sources the person kept are eligible. Review is the gate.
+  const rows = await store.listRunSources(userId, run.id);
+  const reviewed: EvaluatedSource[] = rows
+    .filter((r) => r.included)
+    .map((r) => ({
+      record: r.record,
+      evaluation: r.evaluation,
+      passages: r.passages,
+      queryOrdinals: r.queryOrdinals,
+      reused: r.reused,
+    }));
+
+  let candidates: EvidenceCandidate[] = [];
+  if (run.trigger === "FINDING" && run.findingId) {
+    const finding = await store.findFinding(userId, run.findingId);
+    if (finding) {
+      candidates = [
+        ...findingCandidates(finding),
+        ...(await sourceCandidate(deps.reader, scope, finding.subjectPath, finding.primaryLine)),
+      ];
+    }
+  } else {
+    candidates = await manualCandidates(deps.reader, scope, run.question);
+  }
+  const repositoryEvidence: EvidenceItem[] = assembleContext(candidates, 8_000).items;
+
+  const day = usageDay(t);
+  const started = Date.now();
+  let provider: string | null = null;
+  let model = "unknown";
+  try {
+    const out = await synthesise({
+      provider: deps.provider(),
+      limits,
+      timeoutMs,
+      question: run.question,
+      scope,
+      repositoryEvidence,
+      sources: reviewed,
+      beforeProvider: async () => {
+        // Reserve before contacting the provider; atomic and race safe.
+        if (!(await store.reserve(userId, day, "synthesisCount", limits.dailySynthesisLimit, limits.dailyTokenLimit))) {
+          throw new ResearchError("The daily research synthesis limit has been reached.", "LIMIT_EXCEEDED", {
+            resetsAt: nextResetAt(t).toISOString(),
+          });
+        }
+      },
+    });
+    provider = out.provider;
+    model = out.model ?? model;
+    if (out.providerCalled) {
+      await store.recordUsage(userId, day, {
+        runId: run.id,
+        provider: out.provider ?? "unknown",
+        model,
+        status: "SUCCEEDED",
+        inputTokens: out.usage?.inputTokens ?? null,
+        outputTokens: out.usage?.outputTokens ?? null,
+        totalTokens: out.usage?.totalTokens ?? null,
+        errorCode: null,
+        durationMs: Date.now() - started,
+      });
+    }
+    const { recommendations, ...synthesis } = out.result;
+    await store.saveSynthesis(run.id, {
+      synthesis,
+      recommendations,
+      provider,
+      model: out.model,
+      totalTokens: out.usage?.totalTokens ?? null,
+    });
+  } catch (error) {
+    if (error instanceof ResearchError) throw error;
+    if (error instanceof AIProviderError) {
+      await store
+        .recordUsage(userId, day, {
+          runId: run.id,
+          provider: "gemini",
+          model,
+          status: "FAILED",
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          errorCode: error.code,
+          durationMs: Date.now() - started,
+        })
+        .catch(() => undefined);
+      throw new ResearchError(
+        error.message,
+        error.code === "NOT_CONFIGURED" ? "NOT_CONFIGURED" : "PROVIDER_ERROR",
+        { status: error.code === "TIMEOUT" ? 504 : undefined, retryable: error.retryable },
+      );
+    }
+    throw error;
+  }
 }
 
 /* ---------------------------------------------------------- recommendations */

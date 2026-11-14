@@ -19,6 +19,8 @@ export interface AIRequest {
   timeoutMs?: number;
   /** Ask the provider for a JSON document (Sprint 06). */
   responseFormat?: "text" | "json";
+  /** JSON schema the provider should enforce when responseFormat is "json". */
+  responseSchema?: Record<string, unknown>;
 }
 
 export interface AIResponse {

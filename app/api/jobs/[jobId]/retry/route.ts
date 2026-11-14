@@ -1,7 +1,9 @@
+// app/api/jobs/[jobId]/retry/route.ts
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
 import { requireSession } from "@/lib/auth/session";
+import { dispatchJob } from "@/lib/jobs/dispatch";
 import { retryIndexingJob } from "@/lib/jobs/job-lifecycle";
 import { JobTransitionError } from "@/lib/jobs/job-errors";
 
@@ -45,6 +47,7 @@ export async function POST(_request: Request, context: RouteContext) {
     }
 
     const job = await retryIndexingJob(jobId);
+    dispatchJob(jobId);
 
     return NextResponse.json({
       message: "Indexing job queued for retry.",

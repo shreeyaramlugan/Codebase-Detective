@@ -51,9 +51,28 @@ export function parseModelAnswer(raw: string): RawAnswer {
   } catch {
     throw new MalformedAnswerError("The answer was not valid JSON.");
   }
+  // Models occasionally wrap the object in a one-element array.
+  if (Array.isArray(parsed) && parsed.length === 1) parsed = parsed[0];
   if (!isRecord(parsed)) throw new MalformedAnswerError("Unexpected shape.");
-  if (typeof parsed.answerable !== "boolean") {
-    throw new MalformedAnswerError("Missing answerable flag.");
+
+  // The flag is the only field models drop or stringify in practice. Accept
+  // "true"/"false", and when it is absent infer it from whether any section
+  // was produced. This does not weaken grounding: every citation is still
+  // verified against the stored source before an answer is shown.
+  let answerable: boolean;
+  if (typeof parsed.answerable === "boolean") {
+    answerable = parsed.answerable;
+  } else if (parsed.answerable === "true" || parsed.answerable === "false") {
+    answerable = parsed.answerable === "true";
+  } else if (parsed.answerable === undefined && Array.isArray(parsed.sections)) {
+    answerable = parsed.sections.length > 0;
+  } else {
+    // Names only (never values), so an operator can see what the model sent.
+    const keys = Object.keys(parsed)
+      .slice(0, 6)
+      .map((key) => key.replace(/[^A-Za-z0-9_]/g, "").slice(0, 24))
+      .join(",");
+    throw new MalformedAnswerError(`Missing answerable flag (keys: ${keys || "none"}).`);
   }
   if (!Array.isArray(parsed.sections) || parsed.sections.length > MAX_SECTIONS) {
     throw new MalformedAnswerError("Invalid sections.");
@@ -99,5 +118,5 @@ export function parseModelAnswer(raw: string): RawAnswer {
         .slice(0, MAX_LIMITATIONS)
     : [];
 
-  return { answerable: parsed.answerable, sections, limitations };
+  return { answerable, sections, limitations };
 }

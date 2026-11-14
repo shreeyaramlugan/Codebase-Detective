@@ -18,7 +18,12 @@ enum RepositoryStatus {
 }
 
 enum IndexingJobType {
+  /// Repository ingestion (REPOSITORY_INGESTION in the Sprint 08 vocabulary).
   REPOSITORY_INDEX
+  CODE_ANALYSIS
+  FINDINGS_GENERATION
+  RESEARCH_DISCOVERY
+  RESEARCH_SYNTHESIS
 }
 
 enum IndexingJobStatus {
@@ -74,6 +79,7 @@ model User {
   aiUsageDays     AIUsageDay[]
   aiUsageRecords  AIUsageRecord[]
   researchRuns    ResearchRun[]
+  requestedJobs   IndexingJob[]
   researchSources ResearchSource[]
   researchUsage   ResearchUsageDay[]
   sessions        Session[]
@@ -143,17 +149,35 @@ model IndexingJob {
   completedAt DateTime?
   nextRetryAt DateTime?
 
-  // Reserved for future worker claiming and recovery.
-  lockedAt DateTime?
-  lockedBy String?
+  // Worker claiming and recovery (Sprint 08).
+  lockedAt    DateTime?
+  lockedBy    String?
+  heartbeatAt DateTime?
+
+  /// Who asked for the work. Required for every job type except ingestion;
+  /// ownership of the repository is re-validated against it at execution time.
+  requestedById String?
+  requestedBy   User?   @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  /// Validated, size-limited, type-specific references (never source code).
+  payload   Json?
+  /// Entity references produced by the job (snapshotId, analysisId, ...).
+  result    Json?
+  /// Duplicate-submission guard: at most one active job per key.
+  dedupeKey String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  events JobEvent[]
 
   @@index([repositoryId])
   @@index([repositoryId, status])
   @@index([status, createdAt])
   @@index([status, nextRetryAt])
+  @@index([status, lockedBy])
+  @@index([dedupeKey, status])
+  @@index([requestedById])
   @@map("indexing_job")
 }
 
@@ -1013,11 +1037,11 @@ model ResearchRun {
   engineVersion String
 
   /// Validated synthesis (summary, conflicts, limitations, counters).
-  synthesis Json?
-  provider  String?
-  model     String?
+  synthesis   Json?
+  provider    String?
+  model       String?
   totalTokens Int?
-  errorCode String?
+  errorCode   String?
 
   /// Single-flight guard for discovery and synthesis.
   busyUntil  DateTime?
@@ -1114,4 +1138,47 @@ model ResearchUsageDay {
   updatedAt DateTime @updatedAt
 
   @@id([userId, day])
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 08 - Worker operations
+// ---------------------------------------------------------------------------
+
+/// One row per worker process. Heartbeats make worker health observable.
+model WorkerInstance {
+  id String @id
+
+  hostname        String
+  pid             Int
+  version         String
+  /// STARTING | RUNNING | DRAINING | STOPPED
+  status          String
+  concurrency     Int
+  activeJobs      Int       @default(0)
+  startedAt       DateTime
+  lastHeartbeatAt DateTime
+  stoppedAt       DateTime?
+
+  @@index([status, lastHeartbeatAt])
+  @@map("worker_instance")
+}
+
+/// Append-only execution history for a job. Messages are safe, short and
+/// never contain tokens, secrets or source code.
+model JobEvent {
+  id    String      @id @default(cuid())
+  jobId String
+  job   IndexingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  at       DateTime @default(now())
+  /// CLAIMED | COMPLETED | FAILED | RETRY_SCHEDULED | RECOVERED | RELEASED | TIMED_OUT | ADMIN_RETRY | ...
+  event    String
+  workerId String?
+  attempt  Int?
+  code     String?
+  message  String?
+  data     Json?
+
+  @@index([jobId, at])
+  @@map("job_event")
 }

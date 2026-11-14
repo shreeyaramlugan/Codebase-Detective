@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireSession: vi.fn(),
   start: vi.fn(),
+  enqueue: vi.fn(),
+  dispatch: vi.fn(),
   history: vi.fn(),
   summary: vi.fn(),
   symbols: vi.fn(),
@@ -14,6 +16,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireSession: mocks.requireSession }));
+
+// Analysis now runs in the background worker: the route only enqueues a job.
+vi.mock("@/lib/jobs/job-enqueue-pipeline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jobs/job-enqueue-pipeline")>()),
+  enqueueAnalysisJob: mocks.enqueue,
+}));
+vi.mock("@/lib/jobs/dispatch", () => ({ dispatchJob: mocks.dispatch }));
 
 vi.mock("@/lib/analysis/analysis.service", () => ({
   startSnapshotAnalysis: mocks.start,
@@ -35,6 +44,26 @@ import { GET as diagnosticsGet } from "../../../app/api/analyses/[analysisId]/di
 import { GET as graphGet } from "../../../app/api/analyses/[analysisId]/graph/route";
 import { GET as fileGet } from "../../../app/api/analyses/[analysisId]/files/[fileId]/route";
 import { AnalysisError } from "../../../lib/analysis/analysis.errors";
+import { PipelineEnqueueError } from "../../../lib/jobs/job-enqueue-pipeline";
+
+const jobRow = (over: Record<string, unknown> = {}) => ({
+  id: "job-1",
+  repositoryId: "repo-1",
+  type: "CODE_ANALYSIS",
+  status: "PENDING",
+  attempts: 0,
+  maxAttempts: 3,
+  errorCode: null,
+  errorMessage: null,
+  nextRetryAt: null,
+  startedAt: null,
+  completedAt: null,
+  createdAt: new Date("2026-11-10T10:00:00Z"),
+  result: null,
+  payload: { snapshotId: "snap-1" },
+  lockedBy: "secret-worker",
+  ...over,
+});
 
 const snap = { params: Promise.resolve({ snapshotId: "snap-1" }) };
 const ana = { params: Promise.resolve({ analysisId: "ana-1" }) };
@@ -86,12 +115,8 @@ describe("analysis API routes", () => {
   });
 
   describe("POST /api/snapshots/[snapshotId]/analyze", () => {
-    it("scopes the run to the session user and the snapshot id only", async () => {
-      mocks.start.mockResolvedValue({
-        analysisId: "ana-1",
-        status: "COMPLETED",
-        errorCode: null,
-      });
+    it("queues a job for the session user and the snapshot id only, and returns 202", async () => {
+      mocks.enqueue.mockResolvedValue({ job: jobRow(), deduplicated: false });
       const response = await analyzePost(
         new Request("http://localhost/x", {
           method: "POST",
@@ -100,18 +125,31 @@ describe("analysis API routes", () => {
         snap,
       );
 
-      expect(response.status).toBe(201);
-      expect(mocks.start).toHaveBeenCalledWith("user-1", "snap-1");
-      expect(await response.json()).toEqual({
-        analysisId: "ana-1",
-        status: "COMPLETED",
-        errorCode: null,
-      });
+      expect(response.status).toBe(202);
+      expect(mocks.enqueue).toHaveBeenCalledWith("user-1", "snap-1");
+      expect(mocks.dispatch).toHaveBeenCalledWith("job-1");
+      const body = await response.json();
+      expect(body.job).toMatchObject({ id: "job-1", state: "QUEUED", type: "CODE_ANALYSIS" });
+      expect(body.deduplicated).toBe(false);
+      // Internal fields never reach the client.
+      expect(JSON.stringify(body)).not.toContain("secret-worker");
+      expect(JSON.stringify(body)).not.toContain("payload");
+    });
+
+    it("returns the existing job without dispatching again for a duplicate request", async () => {
+      mocks.enqueue.mockResolvedValue({ job: jobRow({ status: "PROCESSING" }), deduplicated: true });
+      const response = await analyzePost(
+        new Request("http://localhost/x", { method: "POST" }),
+        snap,
+      );
+      expect(response.status).toBe(202);
+      expect((await response.json()).deduplicated).toBe(true);
+      expect(mocks.dispatch).not.toHaveBeenCalled();
     });
 
     it("returns 404 for another user's snapshot and 409 when not ready", async () => {
-      mocks.start.mockRejectedValueOnce(
-        new AnalysisError("Snapshot not found.", "NOT_FOUND"),
+      mocks.enqueue.mockRejectedValueOnce(
+        new PipelineEnqueueError("Snapshot not found.", "NOT_FOUND"),
       );
       expect(
         (
@@ -122,8 +160,8 @@ describe("analysis API routes", () => {
         ).status,
       ).toBe(404);
 
-      mocks.start.mockRejectedValueOnce(
-        new AnalysisError("not ready", "SNAPSHOT_NOT_READY"),
+      mocks.enqueue.mockRejectedValueOnce(
+        new PipelineEnqueueError("not ready", "SNAPSHOT_NOT_READY"),
       );
       expect(
         (
@@ -133,10 +171,11 @@ describe("analysis API routes", () => {
           )
         ).status,
       ).toBe(409);
+      expect(mocks.dispatch).not.toHaveBeenCalled();
     });
 
     it("does not leak unexpected error details", async () => {
-      mocks.start.mockRejectedValue(
+      mocks.enqueue.mockRejectedValue(
         new Error("connect ECONNREFUSED /var/storage/objects"),
       );
       const response = await analyzePost(

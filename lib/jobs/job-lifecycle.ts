@@ -1,14 +1,29 @@
 // lib/jobs/job-lifecycle.ts
 import { prisma } from "@/lib/db/prisma";
 import { JobTransitionError } from "./job-errors";
+import { retryDelayWithHint } from "./job-policy";
+import { sanitiseResult } from "./job-types";
+
+/** Only ingestion jobs drive the repository's own status. */
+const drivesRepositoryStatus = (type: string) => type === "REPOSITORY_INDEX";
+
+const LOCK_CLEARED = {
+  lockedAt: null,
+  lockedBy: null,
+  heartbeatAt: null,
+} as const;
 
 /**
- * Start a pending indexing job.
+ * Start a pending job.
  *
- * The conditional update prevents two callers from
- * claiming the same job simultaneously.
+ * The conditional update prevents two callers from claiming the same job
+ * simultaneously. When a workerId is given the claim is recorded on the job
+ * (owner and heartbeat) so abandoned work can be recognised and recovered.
  */
-export async function startIndexingJob(jobId: string) {
+export async function startIndexingJob(
+  jobId: string,
+  options: { workerId?: string; now?: Date } = {},
+) {
   return prisma.$transaction(async (tx) => {
     const existingJob = await tx.indexingJob.findUnique({
       where: { id: jobId },
@@ -17,6 +32,9 @@ export async function startIndexingJob(jobId: string) {
     if (!existingJob) {
       throw new JobTransitionError("Indexing job not found.", "JOB_NOT_FOUND");
     }
+
+    const now = options.now ?? new Date();
+
     const result = await tx.indexingJob.updateMany({
       where: {
         id: jobId,
@@ -30,11 +48,18 @@ export async function startIndexingJob(jobId: string) {
         attempts: {
           increment: 1,
         },
-        startedAt: new Date(),
+        startedAt: now,
         completedAt: null,
         errorCode: null,
         errorMessage: null,
         nextRetryAt: null,
+        ...(options.workerId
+          ? {
+              lockedAt: now,
+              lockedBy: options.workerId,
+              heartbeatAt: now,
+            }
+          : {}),
       },
     });
 
@@ -67,10 +92,12 @@ export async function startIndexingJob(jobId: string) {
       where: { id: jobId },
     });
 
-    await tx.repository.update({
-      where: { id: job.repositoryId },
-      data: { status: "INDEXING" },
-    });
+    if (drivesRepositoryStatus(job.type)) {
+      await tx.repository.update({
+        where: { id: job.repositoryId },
+        data: { status: "INDEXING" },
+      });
+    }
 
     return job;
   });
@@ -78,21 +105,22 @@ export async function startIndexingJob(jobId: string) {
 
 /**
  * Mark a processing job as completed.
- */
-/**
- * Mark a processing job as completed.
  *
- * Repository status defaults to INDEXED for backward compatibility.
+ * Repository status defaults to INDEXED for backward compatibility and is
+ * only touched by ingestion jobs. When a workerId is given, only the worker
+ * that still owns the job can complete it.
  */
 export async function completeIndexingJob(
   jobId: string,
   repositoryStatus: "INDEXED" | "PARTIALLY_INDEXED" = "INDEXED",
+  options: { workerId?: string; result?: unknown } = {},
 ) {
   return prisma.$transaction(async (tx) => {
     const result = await tx.indexingJob.updateMany({
       where: {
         id: jobId,
         status: "PROCESSING",
+        ...(options.workerId ? { lockedBy: options.workerId } : {}),
       },
       data: {
         status: "COMPLETED",
@@ -100,6 +128,10 @@ export async function completeIndexingJob(
         errorCode: null,
         errorMessage: null,
         nextRetryAt: null,
+        ...LOCK_CLEARED,
+        ...(options.result !== undefined
+          ? { result: (sanitiseResult(options.result) ?? undefined) as never }
+          : {}),
       },
     });
 
@@ -125,21 +157,24 @@ export async function completeIndexingJob(
       where: { id: jobId },
     });
 
-    await tx.repository.update({
-      where: { id: job.repositoryId },
-      data: { status: repositoryStatus },
-    });
+    if (drivesRepositoryStatus(job.type)) {
+      await tx.repository.update({
+        where: { id: job.repositoryId },
+        data: { status: repositoryStatus },
+      });
+    }
 
     return job;
   });
 }
+
 /**
  * Mark a processing job as failed and schedule its next retry.
  *
- * Retry policy:
+ * Retry policy (unchanged from Sprint 01 for the default case):
  * Attempt 1 failure: retry after 30 seconds.
  * Attempt 2 failure: retry after 60 seconds.
- * Maximum attempts reached: no further retry.
+ * Maximum attempts reached, or a permanent failure: no further retry.
  *
  * Only safe, user-facing error information should be supplied.
  * Never pass stack traces, secrets or raw internal exceptions.
@@ -148,6 +183,11 @@ export async function failIndexingJob(
   jobId: string,
   errorCode: string,
   errorMessage: string,
+  options: {
+    retryable?: boolean;
+    retryAfterMs?: number | null;
+    workerId?: string;
+  } = {},
 ) {
   return prisma.$transaction(async (tx) => {
     const existingJob = await tx.indexingJob.findUnique({
@@ -160,19 +200,23 @@ export async function failIndexingJob(
 
     const now = new Date();
 
-    // Schedule another attempt only if attempts remain.
-    const retryDelayMs =
-      30_000 * Math.pow(2, Math.max(0, existingJob.attempts - 1));
+    // Schedule another attempt only if the failure is retryable and attempts remain.
+    const mayRetry =
+      options.retryable !== false &&
+      existingJob.attempts < existingJob.maxAttempts;
 
-    const nextRetryAt =
-      existingJob.attempts < existingJob.maxAttempts
-        ? new Date(now.getTime() + retryDelayMs)
-        : null;
+    const nextRetryAt = mayRetry
+      ? new Date(
+          now.getTime() +
+            retryDelayWithHint(existingJob.attempts, options.retryAfterMs),
+        )
+      : null;
 
     const result = await tx.indexingJob.updateMany({
       where: {
         id: jobId,
         status: "PROCESSING",
+        ...(options.workerId ? { lockedBy: options.workerId } : {}),
       },
       data: {
         status: "FAILED",
@@ -180,6 +224,7 @@ export async function failIndexingJob(
         errorCode: errorCode.slice(0, 100),
         errorMessage: errorMessage.slice(0, 500),
         nextRetryAt,
+        ...LOCK_CLEARED,
       },
     });
 
@@ -205,10 +250,12 @@ export async function failIndexingJob(
       where: { id: jobId },
     });
 
-    await tx.repository.update({
-      where: { id: job.repositoryId },
-      data: { status: "FAILED" },
-    });
+    if (drivesRepositoryStatus(job.type)) {
+      await tx.repository.update({
+        where: { id: job.repositoryId },
+        data: { status: "FAILED" },
+      });
+    }
 
     return job;
   });
@@ -217,7 +264,7 @@ export async function failIndexingJob(
 /**
  * Return an eligible failed job to the pending queue.
  */
-export async function retryIndexingJob(jobId: string) {
+export async function retryIndexingJob(jobId: string, options: { now?: Date } = {}) {
   return prisma.$transaction(async (tx) => {
     const existingJob = await tx.indexingJob.findUnique({
       where: { id: jobId },
@@ -226,7 +273,7 @@ export async function retryIndexingJob(jobId: string) {
     if (!existingJob) {
       throw new JobTransitionError("Indexing job not found.", "JOB_NOT_FOUND");
     }
-    const now = new Date();
+    const now = options.now ?? new Date();
 
     const result = await tx.indexingJob.updateMany({
       where: {
@@ -244,6 +291,7 @@ export async function retryIndexingJob(jobId: string) {
         errorCode: null,
         errorMessage: null,
         nextRetryAt: null,
+        ...LOCK_CLEARED,
       },
     });
 
@@ -276,16 +324,24 @@ export async function retryIndexingJob(jobId: string) {
       where: { id: jobId },
     });
 
-    // Never run two active jobs for one repository at the same time.
-    // Checked only after the job is known to be eligible, so existing
-    // error codes are unchanged. Throwing rolls the transaction back, so
-    // the job stays FAILED.
+    // Never run two active jobs of the same kind at the same time: one per
+    // repository for ingestion, one per dedupe key for everything else.
+    // Checked only after the job is known to be eligible, so existing error
+    // codes are unchanged. Throwing rolls the transaction back, so the job
+    // stays FAILED.
     const otherActiveJob = await tx.indexingJob.findFirst({
-      where: {
-        repositoryId: job.repositoryId,
-        id: { not: jobId },
-        status: { in: ["PENDING", "PROCESSING"] },
-      },
+      where: drivesRepositoryStatus(job.type)
+        ? {
+            repositoryId: job.repositoryId,
+            type: "REPOSITORY_INDEX",
+            id: { not: jobId },
+            status: { in: ["PENDING", "PROCESSING"] },
+          }
+        : {
+            dedupeKey: job.dedupeKey ?? `job:${job.id}`,
+            id: { not: jobId },
+            status: { in: ["PENDING", "PROCESSING"] },
+          },
       select: { id: true },
     });
 
@@ -296,10 +352,12 @@ export async function retryIndexingJob(jobId: string) {
       );
     }
 
-    await tx.repository.update({
-      where: { id: job.repositoryId },
-      data: { status: "QUEUED" },
-    });
+    if (drivesRepositoryStatus(job.type)) {
+      await tx.repository.update({
+        where: { id: job.repositoryId },
+        data: { status: "QUEUED" },
+      });
+    }
 
     return job;
   });

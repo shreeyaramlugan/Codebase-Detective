@@ -134,4 +134,52 @@ describe("createAIProvider (gemini)", () => {
       else process.env.AI_PROVIDER = previous;
     }
   });
+
+  describe("overload handling", () => {
+    function sequence(responses: Array<{ status: number; body: unknown }>) {
+      const urls: string[] = [];
+      const fetchImpl = (async (url: string) => {
+        urls.push(url);
+        const next = responses[Math.min(urls.length - 1, responses.length - 1)];
+        return new Response(JSON.stringify(next.body), { status: next.status });
+      }) as unknown as typeof fetch;
+      return { fetchImpl, urls };
+    }
+    const busy = { status: 503, body: { error: { message: "high demand" } } };
+
+    it("retries once on 503 and returns the second answer", async () => {
+      const { fetchImpl, urls } = sequence([busy, { status: 200, body: ok("second") }]);
+      const p = new GeminiProvider({ apiKey: "k", model: "primary-model", fetchImpl });
+      const r = await p.generate(REQ);
+      expect(r.content).toBe("second");
+      expect(urls).toHaveLength(2);
+      expect(urls.every((u) => u.includes("primary-model"))).toBe(true);
+    });
+
+    it("falls back to the fallback model after the retry also fails", async () => {
+      const { fetchImpl, urls } = sequence([busy, busy, { status: 200, body: ok("from fallback") }]);
+      const p = new GeminiProvider({ apiKey: "k", model: "primary-model", fallbackModel: "backup-model", fetchImpl });
+      const r = await p.generate(REQ);
+      expect(r.content).toBe("from fallback");
+      expect(urls).toHaveLength(3);
+      expect(urls[2]).toContain("backup-model");
+    });
+
+    it("does not retry permanent errors such as a missing model", async () => {
+      const { fetchImpl, urls } = sequence([{ status: 404, body: { error: { message: "gone" } } }]);
+      const p = new GeminiProvider({ apiKey: "k", fallbackModel: "backup-model", fetchImpl });
+      const e = await failure(p);
+      expect(e.code).toBe("PROVIDER_UNAVAILABLE");
+      expect(urls).toHaveLength(1);
+    });
+
+    it("gives up with the provider error when every attempt is overloaded", async () => {
+      const { fetchImpl, urls } = sequence([busy]);
+      const p = new GeminiProvider({ apiKey: "k", model: "primary-model", fallbackModel: "backup-model", fetchImpl });
+      const e = await failure(p);
+      expect(e.code).toBe("PROVIDER_UNAVAILABLE");
+      expect(e.retryable).toBe(true);
+      expect(urls).toHaveLength(3);
+    });
+  });
 });

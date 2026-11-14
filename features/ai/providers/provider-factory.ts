@@ -14,6 +14,7 @@ export function createAIProvider(): AIProvider {
       return new GeminiProvider({
         apiKey: process.env.GEMINI_API_KEY,
         model: process.env.GEMINI_MODEL,
+        fallbackModel: process.env.GEMINI_FALLBACK_MODEL,
       });
 
     default:
