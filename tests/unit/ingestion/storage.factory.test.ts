@@ -103,7 +103,7 @@ describe("createSourceStorageAdapter", () => {
   it("rejects unsupported providers", () => {
     expect(() =>
       createSourceStorageAdapter({
-        provider: "s3",
+        provider: "azure",
         rootPath,
       }),
     ).toThrowError(
@@ -144,7 +144,7 @@ describe("createSourceStorageAdapter", () => {
   it("throws a StorageError for invalid configuration", () => {
     try {
       createSourceStorageAdapter({
-        provider: "s3",
+        provider: "azure",
         rootPath,
       });
 

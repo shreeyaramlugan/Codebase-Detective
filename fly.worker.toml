@@ -1,0 +1,26 @@
+# fly.worker.toml (path: repo root)
+# fly.worker.toml - example worker deployment on Fly.io (any Docker host works).
+# Secrets are set with `fly secrets set` and never committed.
+app = "codebase-detective-worker"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+[env]
+  NODE_ENV = "production"
+  BACKGROUND_EXECUTION = "worker"
+  SOURCE_STORAGE_PROVIDER = "s3"
+  WORKER_HEALTH_HOST = "0.0.0.0"
+  WORKER_HEALTH_PORT = "3101"
+
+[[services]]
+  internal_port = 3101
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    path = "/healthz"

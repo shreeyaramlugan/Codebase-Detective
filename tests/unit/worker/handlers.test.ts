@@ -213,8 +213,8 @@ describe("research handlers", () => {
 
   it("final discovery failure marks the run FAILED; final synthesis failure reopens review", async () => {
     const { handlers, calls } = makePorts();
-    await handlers.RESEARCH_DISCOVERY.onFinalFailure(disc(), { code: "PROVIDER_ERROR", message: "x" });
-    await handlers.RESEARCH_SYNTHESIS.onFinalFailure(synth(), { code: "AI_UNAVAILABLE", message: "x" });
+    await handlers.RESEARCH_DISCOVERY!.onFinalFailure!(disc(), { code: "PROVIDER_ERROR", message: "x" });
+    await handlers.RESEARCH_SYNTHESIS!.onFinalFailure!(synth(), { code: "AI_UNAVAILABLE", message: "x" });
     expect(calls).toContain("failDiscovery:run_1:DISCOVERY_FAILED");
     expect(calls).toContain("reopen:run_1:AI_UNAVAILABLE");
   });

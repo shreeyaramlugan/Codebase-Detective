@@ -37,8 +37,12 @@ describe("assistant security boundaries", () => {
     const relative = users
       .map((f) => f.slice(root.length + 1).split("\\").join("/"))
       .sort();
+    // The provider factory is the only code that uses the key. The deploy-time
+    // checker (lib/config/production-env.ts) only tests that it is present and
+    // never reads or prints its value.
     expect(relative).toEqual([
       "features/ai/providers/provider-factory.ts",
+      "lib/config/production-env.ts",
     ]);
   });
 

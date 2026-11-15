@@ -1,0 +1,28 @@
+# .github/workflows/migrate-production.yml
+name: Apply production migrations
+
+# Manual only. Run it BEFORE deploying a release that contains new migrations.
+# Migrations are applied forwards only (prisma migrate deploy); never reset.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        env:
+          # Use the DIRECT (non-pooled) connection string for migrations.
+          DATABASE_URL: ${{ secrets.PRODUCTION_DIRECT_DATABASE_URL }}

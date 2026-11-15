@@ -1,5 +1,5 @@
 // lib/ingestion/storage/storage.types.ts
-export type StorageProvider = "local";
+export type StorageProvider = "local" | "s3";
 
 export interface StoredObject {
   storageKey: string;

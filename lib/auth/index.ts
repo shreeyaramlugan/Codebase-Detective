@@ -13,6 +13,18 @@ if (!authUrl) {
   throw new Error("BETTER_AUTH_URL is not configured");
 }
 
+// The app's own origin plus any extra origins (preview URLs, custom domain)
+// listed in TRUSTED_ORIGINS. localhost is only trusted outside production.
+const trustedOrigins = [
+  authUrl,
+  process.env.NEXT_PUBLIC_APP_URL,
+  ...(process.env.TRUSTED_ORIGINS ?? "").split(","),
+  ...(process.env.NODE_ENV === "production" ? [] : ["http://localhost:3000"]),
+]
+  .map((origin) => origin?.trim().replace(/\/+$/, ""))
+  .filter((origin): origin is string => Boolean(origin))
+  .filter((origin, index, all) => all.indexOf(origin) === index);
+
 export const auth = betterAuth({
   appName: "Codebase Detective",
 
@@ -23,7 +35,7 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
 
-  trustedOrigins: ["http://localhost:3000"],
+  trustedOrigins,
 
   emailAndPassword: {
     enabled: true,

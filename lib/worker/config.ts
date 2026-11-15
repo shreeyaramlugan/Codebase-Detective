@@ -66,8 +66,18 @@ export function loadWorkerConfig(env: Env = process.env): {
   }
 
   const storage = (env.SOURCE_STORAGE_PROVIDER ?? "local").trim();
-  if (storage !== "local") {
+  if (storage !== "local" && storage !== "s3") {
     problems.push(`SOURCE_STORAGE_PROVIDER "${storage.slice(0, 30)}" is not supported.`);
+  }
+  if (storage === "s3") {
+    for (const name of ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"]) {
+      if (!env[name]?.trim()) problems.push(`${name} is required when SOURCE_STORAGE_PROVIDER=s3.`);
+    }
+  }
+  if (env.NODE_ENV === "production" && storage === "local") {
+    // Snapshots on a worker's own disk would not be visible to the web app and
+    // would be lost on every redeploy.
+    problems.push("SOURCE_STORAGE_PROVIDER=local is not allowed in production; use s3.");
   }
 
   const ai = env.AI_PROVIDER ?? "mock";

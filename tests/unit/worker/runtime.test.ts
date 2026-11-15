@@ -252,6 +252,6 @@ describe("bootstrap", () => {
     expect(db.workerInstance.rows.some((r: any) => r.id === "w-boot")).toBe(true);
     await worker.shutdown("test");
     await worker.done;
-    expect(db.workerInstance.rows.find((r: any) => r.id === "w-boot").status).toBe("STOPPED");
+    expect(db.workerInstance.rows.find((r: any) => r.id === "w-boot")?.status).toBe("STOPPED");
   });
 });

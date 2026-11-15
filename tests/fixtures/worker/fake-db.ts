@@ -12,7 +12,8 @@ type Row = Record<string, any>;
 
 const OPS = new Set(["equals", "not", "in", "notIn", "lt", "lte", "gt", "gte", "contains"]);
 
-const tv = (v: unknown) => (v instanceof Date ? v.getTime() : v);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tv = (v: unknown): any => (v instanceof Date ? v.getTime() : v);
 
 function matchValue(value: any, cond: any): boolean {
   if (cond === null || typeof cond !== "object" || cond instanceof Date) return tv(value) === tv(cond);
