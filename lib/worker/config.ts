@@ -74,10 +74,33 @@ export function loadWorkerConfig(env: Env = process.env): {
       if (!env[name]?.trim()) problems.push(`${name} is required when SOURCE_STORAGE_PROVIDER=s3.`);
     }
   }
+  if (storage === "s3" && env.S3_ENDPOINT?.trim()) {
+    let endpointOk = false;
+    try {
+      const url = new URL(env.S3_ENDPOINT.trim());
+      endpointOk = url.protocol === "https:" && !url.hostname.includes("<");
+    } catch {
+      endpointOk = false;
+    }
+    if (!endpointOk) {
+      problems.push(
+        "S3_ENDPOINT must be a full https URL, for example https://<account-id>.r2.cloudflarestorage.com with your real account id (no bucket name, no placeholder).",
+      );
+    }
+  }
   if (env.NODE_ENV === "production" && storage === "local") {
-    // Snapshots on a worker's own disk would not be visible to the web app and
-    // would be lost on every redeploy.
-    problems.push("SOURCE_STORAGE_PROVIDER=local is not allowed in production; use s3.");
+    if (env.ALLOW_LOCAL_STORAGE === "true") {
+      // Self-hosting on one machine: the web app and worker share one disk.
+      warnings.push(
+        "Using local snapshot storage in production (ALLOW_LOCAL_STORAGE=true). Only valid when the web app and worker run on the same machine and the disk is backed up.",
+      );
+    } else {
+      // On a hosted worker the disk is separate from the web app's and is lost
+      // on every redeploy.
+      problems.push(
+        "SOURCE_STORAGE_PROVIDER=local is not allowed in production; use s3 (or set ALLOW_LOCAL_STORAGE=true when the web app and worker run on the same machine).",
+      );
+    }
   }
 
   const ai = env.AI_PROVIDER ?? "mock";

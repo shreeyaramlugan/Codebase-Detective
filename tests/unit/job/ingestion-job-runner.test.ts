@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { JobTransitionError } from "@/lib/jobs/job-errors";
 import { SnapshotIngestionError } from "@/lib/ingestion/snapshot/snapshot.errors";
+import { StorageError } from "@/lib/ingestion/storage/storage.errors";
 
 const mocks = vi.hoisted(() => ({
   startJob: vi.fn(),
@@ -140,6 +141,26 @@ describe("processIndexingJob", () => {
     });
     // The ingestion service records the job failure itself.
     expect(mocks.failJob).not.toHaveBeenCalled();
+  });
+
+  it("records a storage configuration failure on the job instead of leaving it processing", async () => {
+    mocks.ingest.mockRejectedValue(
+      new StorageError("S3_ENDPOINT is not a valid URL.", "STORAGE_CONFIGURATION_ERROR"),
+    );
+
+    const outcome = await processIndexingJob("job-1");
+
+    expect(outcome).toMatchObject({
+      kind: "FAILED",
+      code: "STORAGE_CONFIGURATION_ERROR",
+      detail: "S3_ENDPOINT is not a valid URL.",
+    });
+    expect(mocks.failJob).toHaveBeenCalledWith(
+      "job-1",
+      "STORAGE_CONFIGURATION_ERROR",
+      "Source storage is unavailable or misconfigured.",
+      { retryable: false },
+    );
   });
 
   it("does not leak unexpected error details", async () => {

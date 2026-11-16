@@ -37,9 +37,15 @@ export function validateProductionEnv(env: Env, target: Target): EnvReport {
   }
 
   if (env.SOURCE_STORAGE_PROVIDER !== "s3") {
-    errors.push(
-      "SOURCE_STORAGE_PROVIDER must be s3 in production (local disk is not durable and is not shared between the web app and the worker).",
-    );
+    if (env.SOURCE_STORAGE_PROVIDER === "local" && env.ALLOW_LOCAL_STORAGE === "true") {
+      warnings.push(
+        "Local snapshot storage is enabled (ALLOW_LOCAL_STORAGE=true): fine for one machine running both the web app and the worker, not for Vercel or a hosted worker.",
+      );
+    } else {
+      errors.push(
+        "SOURCE_STORAGE_PROVIDER must be s3 in production (local disk is not durable and is not shared between the web app and the worker). For a single self-hosted machine, set SOURCE_STORAGE_PROVIDER=local and ALLOW_LOCAL_STORAGE=true.",
+      );
+    }
   } else {
     for (const name of [
       "S3_ENDPOINT",

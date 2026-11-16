@@ -74,8 +74,28 @@ describe("worker configuration with durable storage", () => {
     expect(() => loadWorkerConfig({ ...base, SOURCE_STORAGE_PROVIDER: "local" })).toThrowError(/not allowed in production/);
   });
 
+  it("allows local storage in production only with the explicit opt-in", () => {
+    const local = { ...base, SOURCE_STORAGE_PROVIDER: "local" };
+    expect(() => loadWorkerConfig({ ...local, ALLOW_LOCAL_STORAGE: "true" })).not.toThrow();
+    expect(loadWorkerConfig({ ...local, ALLOW_LOCAL_STORAGE: "true" }).warnings.join(" ")).toContain("local snapshot storage");
+    expect(() => loadWorkerConfig({ ...local, ALLOW_LOCAL_STORAGE: "yes" })).toThrowError(/not allowed in production/);
+  });
+
+  it("the env checker honours the opt-in for self-hosting", () => {
+    const selfHosted = { ...good, SOURCE_STORAGE_PROVIDER: "local", ALLOW_LOCAL_STORAGE: "true" };
+    expect(validateProductionEnv(selfHosted, "worker").errors).toEqual([]);
+    expect(validateProductionEnv({ ...selfHosted, ALLOW_LOCAL_STORAGE: undefined }, "worker").errors.join(" ")).toContain("SOURCE_STORAGE_PROVIDER");
+  });
+
   it("requires S3 settings when s3 is selected", () => {
     expect(() => loadWorkerConfig({ ...base, SOURCE_STORAGE_PROVIDER: "s3" })).toThrowError(/S3_ENDPOINT/);
+  });
+
+  it("rejects a placeholder or malformed S3 endpoint at startup", () => {
+    const s3 = { ...base, SOURCE_STORAGE_PROVIDER: "s3", S3_BUCKET: "b", S3_ACCESS_KEY_ID: "i", S3_SECRET_ACCESS_KEY: "s" };
+    expect(() => loadWorkerConfig({ ...s3, S3_ENDPOINT: "https://<account-id>.r2.cloudflarestorage.com" })).toThrowError(/S3_ENDPOINT must be a full https URL/);
+    expect(() => loadWorkerConfig({ ...s3, S3_ENDPOINT: "account.r2.cloudflarestorage.com" })).toThrowError(/S3_ENDPOINT must be a full https URL/);
+    expect(() => loadWorkerConfig({ ...s3, S3_ENDPOINT: "http://account.r2.cloudflarestorage.com" })).toThrowError(/S3_ENDPOINT must be a full https URL/);
   });
 
   it("accepts a complete s3 configuration", () => {

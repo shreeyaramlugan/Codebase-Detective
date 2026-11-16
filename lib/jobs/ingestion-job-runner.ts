@@ -4,6 +4,7 @@ import type { IndexingJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { ingestRepositorySnapshot } from "@/lib/ingestion/snapshot/snapshot-ingestion.service";
 import { SnapshotIngestionError } from "@/lib/ingestion/snapshot/snapshot.errors";
+import { StorageError } from "@/lib/ingestion/storage/storage.errors";
 import type { SnapshotIngestionResult } from "@/lib/ingestion/snapshot/snapshot.types";
 import { JobTransitionError } from "./job-errors";
 import { failIndexingJob, startIndexingJob } from "./job-lifecycle";
@@ -157,11 +158,34 @@ export async function runIngestionForClaimedJob(
     const causeCode =
       rawCause && /^[A-Z0-9_]{1,64}$/.test(rawCause) ? rawCause : undefined;
 
+    // StorageError messages are fixed strings that never contain credentials,
+    // so they are safe to log and show an operator what is misconfigured.
     const detail =
-      error instanceof SnapshotIngestionError
+      error instanceof SnapshotIngestionError || error instanceof StorageError
         ? error.message.slice(0, 200)
         : undefined;
 
-    return { kind: "FAILED", jobId: job.id, code, causeCode, detail };
+    // A failure thrown before the ingestion service started (for example a
+    // storage configuration error) has not been recorded on the job. Record it
+    // now, otherwise the job stays PROCESSING until stale recovery retries it.
+    if (!(error instanceof SnapshotIngestionError)) {
+      const storageFailure = error instanceof StorageError;
+      await failIndexingJob(
+        job.id,
+        storageFailure ? error.code : "FILE_INGESTION_FAILED",
+        storageFailure
+          ? "Source storage is unavailable or misconfigured."
+          : "Repository file ingestion failed.",
+        { retryable: storageFailure ? error.retryable : false },
+      ).catch(() => undefined);
+    }
+
+    return {
+      kind: "FAILED",
+      jobId: job.id,
+      code: error instanceof StorageError ? error.code : code,
+      causeCode,
+      detail,
+    };
   }
 }
