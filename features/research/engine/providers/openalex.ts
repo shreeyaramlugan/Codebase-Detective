@@ -4,7 +4,7 @@
 // open-access status and licence come straight from the record.
 import type { QueryPlan, SourceRecord, SourceClass } from "../contracts";
 import { EXCERPT_CACHE_CHARS } from "../contracts";
-import { fetchBounded, type FetchLike } from "../http";
+import { ResearchHttpError, fetchBounded, type FetchLike } from "../http";
 import { canonicalUrl, contentHash, doiUrl, normaliseDoi, sourceKey } from "../identity";
 import { MinIntervalLimiter } from "../rate-limit";
 import { failure } from "./crossref";
@@ -118,6 +118,8 @@ export function parseOpenAlexWork(work: OpenAlexWork, retrievedAt: string): Disc
 export interface OpenAlexOptions {
   fetchImpl: FetchLike;
   contactEmail: string | null;
+  /** Free key from openalex.org/settings/api. OpenAlex requires one since February 2026. */
+  apiKey?: string | null;
   limiter?: MinIntervalLimiter;
 }
 
@@ -137,6 +139,7 @@ export class OpenAlexProvider implements SourceProvider {
         "id,doi,title,display_name,publication_date,type,authorships,primary_location,open_access,best_oa_location,abstract_inverted_index,cited_by_count",
     });
     if (this.options.contactEmail) params.set("mailto", this.options.contactEmail);
+    if (this.options.apiKey) params.set("api_key", this.options.apiKey);
     try {
       await ctx.countRequest();
       await this.limiter.acquire();
@@ -165,7 +168,15 @@ export class OpenAlexProvider implements SourceProvider {
         },
       };
     } catch (error) {
-      return failure(this.name, query, error, started);
+      const result = failure(this.name, query, error, started);
+      // Without a key OpenAlex answers 409 (daily free credits used) or 429.
+      // Say what to do instead of a generic message; the key is never logged.
+      const status = error instanceof ResearchHttpError ? error.status : undefined;
+      if (!this.options.apiKey && (status === 409 || status === 429 || status === 401 || status === 403)) {
+        result.diagnostic.note =
+          "OpenAlex requires a free API key. Create one at openalex.org/settings/api and set OPENALEX_API_KEY.";
+      }
+      return result;
     }
   }
 }

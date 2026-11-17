@@ -78,13 +78,17 @@ export function resolveResearchLimits(
 export interface ResearchRuntimeOptions {
   /** Contact address sent to Crossref/OpenAlex "polite pool". Optional; env only. */
   contactEmail: string | null;
+  /** OpenAlex API key (OPENALEX_API_KEY). Server-side only. */
+  openAlexApiKey: string | null;
 }
 
 export function resolveRuntimeOptions(
   env: Record<string, string | undefined> = process.env,
 ): ResearchRuntimeOptions {
   const email = env.RESEARCH_CONTACT_EMAIL?.trim();
+  const key = env.OPENALEX_API_KEY?.trim();
   return {
     contactEmail: email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null,
+    openAlexApiKey: /^[A-Za-z0-9_-]{10,200}$/.test(key ?? "") ? (key as string) : null,
   };
 }

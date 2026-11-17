@@ -186,12 +186,15 @@ export function failure(
   const code = error instanceof ResearchHttpError ? error.code : "UNAVAILABLE";
   const status =
     code === "RATE_LIMITED" ? "RATE_LIMITED" : code === "TIMEOUT" ? "TIMEOUT" : "UNAVAILABLE";
+  const httpStatus = error instanceof ResearchHttpError ? error.status : undefined;
   const note =
     status === "RATE_LIMITED"
       ? "The provider is rate limiting requests; try again later."
       : status === "TIMEOUT"
         ? "The provider took too long to respond."
-        : "The provider could not be reached or returned an unreadable response.";
+        : httpStatus
+          ? `The provider answered with HTTP ${httpStatus}.`
+          : "The provider could not be reached or returned an unreadable response.";
   return {
     sources: [],
     diagnostic: { ...emptyDiagnostic(provider, query, status, note), durationMs: Date.now() - started },
