@@ -158,6 +158,28 @@ describe("Crossref", () => {
     expect(c.requests).toBe(2);
   });
 
+  it("retries once without the field list when Crossref answers HTTP 400", async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      urls.push(url);
+      return url.includes("select=") ? new Response("bad select", { status: 400 }) : json({ message: { items: [item] } });
+    }) as unknown as typeof fetch;
+    const c = ctx();
+    const r = await new CrossrefProvider({ fetchImpl, contactEmail: null, limiter: instant() }).discover(plan, c);
+    expect(r.sources).toHaveLength(1);
+    expect(urls).toHaveLength(2);
+    expect(urls[1]).not.toContain("select=");
+    expect(c.requests).toBe(2);
+    expect(urls[0]).not.toContain("subtype");
+  });
+
+  it("reports the HTTP status when Crossref keeps refusing", async () => {
+    const fetchImpl = (async () => new Response("no", { status: 400 })) as unknown as typeof fetch;
+    const r = await new CrossrefProvider({ fetchImpl, contactEmail: null, limiter: instant() }).discover(plan, ctx());
+    expect(r.diagnostic.status).toBe("UNAVAILABLE");
+    expect(r.diagnostic.note).toContain("HTTP 400");
+  });
+
   it("reports rate limiting and failures as diagnostics instead of throwing", async () => {
     const limited = (async () => new Response("", { status: 429 })) as unknown as typeof fetch;
     const r = await new CrossrefProvider({ fetchImpl: limited, contactEmail: null, limiter: instant() }).discover(plan, ctx());

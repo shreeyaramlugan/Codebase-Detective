@@ -140,20 +140,35 @@ export class CrossrefProvider implements SourceProvider {
     const params = new URLSearchParams({
       "query.bibliographic": query.text,
       rows: String(ctx.limits.maxSourcesPerQuery),
-      select: "DOI,title,author,issued,type,subtype,container-title,abstract,publisher,URL,license,is-referenced-by-count",
+      // Only fields Crossref documents as selectable; an unknown key makes the
+      // whole request fail with HTTP 400 (the cause of an earlier outage here).
+      select: "DOI,title,author,issued,type,container-title,abstract,publisher,URL,license,is-referenced-by-count",
     });
     if (this.options.contactEmail) params.set("mailto", this.options.contactEmail);
 
     try {
-      await ctx.countRequest();
-      await this.limiter.acquire();
-      const body = await fetchBounded(`${ENDPOINT}?${params}`, {
-        fetchImpl: this.options.fetchImpl,
-        timeoutMs: ctx.limits.providerTimeoutMs,
-        maxBytes: 2_000_000,
-        accept: "application/json",
-        hostAllowed: (u) => u.hostname === "api.crossref.org",
-      });
+      const request = async (p: URLSearchParams, maxBytes: number) => {
+        await ctx.countRequest();
+        await this.limiter.acquire();
+        return fetchBounded(`${ENDPOINT}?${p}`, {
+          fetchImpl: this.options.fetchImpl,
+          timeoutMs: ctx.limits.providerTimeoutMs,
+          maxBytes,
+          accept: "application/json",
+          hostAllowed: (u) => u.hostname === "api.crossref.org",
+        });
+      };
+      let body;
+      try {
+        body = await request(params, 2_000_000);
+      } catch (error) {
+        // If Crossref rejects the field list (HTTP 400), retry once without it
+        // rather than losing all scholarly results. The full records are larger.
+        if (!(error instanceof ResearchHttpError) || error.status !== 400) throw error;
+        const plain = new URLSearchParams(params);
+        plain.delete("select");
+        body = await request(plain, 4_000_000);
+      }
       const json = JSON.parse(body.text) as { message?: { items?: unknown } };
       const items = Array.isArray(json.message?.items) ? (json.message!.items as CrossrefItem[]) : [];
       const retrievedAt = ctx.now().toISOString();
