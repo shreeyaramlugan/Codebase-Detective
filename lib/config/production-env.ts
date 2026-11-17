@@ -77,6 +77,12 @@ export function validateProductionEnv(env: Env, target: Target): EnvReport {
     );
   }
 
+  if (!env.OPENALEX_API_KEY?.trim()) {
+    warnings.push(
+      "OPENALEX_API_KEY is not set: OpenAlex now requires a free key, so scholarly discovery from OpenAlex will fail.",
+    );
+  }
+
   if (!env.RESEARCH_CONTACT_EMAIL?.trim()) {
     warnings.push(
       "RESEARCH_CONTACT_EMAIL is not set: Crossref and OpenAlex give better rate limits to identified clients.",

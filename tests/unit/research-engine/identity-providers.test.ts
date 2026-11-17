@@ -59,6 +59,9 @@ describe("limits and options", () => {
     expect(resolveRuntimeOptions({}).contactEmail).toBeNull();
     expect(resolveRuntimeOptions({ RESEARCH_CONTACT_EMAIL: "ops@example.com" }).contactEmail).toBe("ops@example.com");
     expect(resolveRuntimeOptions({ RESEARCH_CONTACT_EMAIL: "bad" }).contactEmail).toBeNull();
+    expect(resolveRuntimeOptions({}).openAlexApiKey).toBeNull();
+    expect(resolveRuntimeOptions({ OPENALEX_API_KEY: " abcDEF1234567890 " }).openAlexApiKey).toBe("abcDEF1234567890");
+    expect(resolveRuntimeOptions({ OPENALEX_API_KEY: "bad key!" }).openAlexApiKey).toBeNull();
   });
 });
 
@@ -203,6 +206,22 @@ describe("OpenAlex", () => {
     const down = (async () => new Response("", { status: 503 })) as unknown as typeof fetch;
     const d = await new OpenAlexProvider({ fetchImpl: down, contactEmail: null, limiter: instant() }).discover(plan, ctx());
     expect(d.diagnostic.status).toBe("UNAVAILABLE");
+    expect(d.diagnostic.note).toContain("HTTP 503");
+  });
+
+  it("sends the API key when configured and explains a missing key without leaking it", async () => {
+    const urls: string[] = [];
+    const ok = (async (url: string) => { urls.push(url); return json({ results: [work] }); }) as unknown as typeof fetch;
+    await new OpenAlexProvider({ fetchImpl: ok, contactEmail: null, apiKey: "secretKey12345", limiter: instant() }).discover(plan, ctx());
+    expect(urls[0]).toContain("api_key=secretKey12345");
+    await new OpenAlexProvider({ fetchImpl: ok, contactEmail: null, limiter: instant() }).discover(plan, ctx());
+    expect(urls[1]).not.toContain("api_key");
+
+    const refused = (async () => new Response("", { status: 409 })) as unknown as typeof fetch;
+    const r = await new OpenAlexProvider({ fetchImpl: refused, contactEmail: null, limiter: instant() }).discover(plan, ctx());
+    expect(r.diagnostic.note).toContain("OPENALEX_API_KEY");
+    const withKey = await new OpenAlexProvider({ fetchImpl: refused, contactEmail: null, apiKey: "secretKey12345", limiter: instant() }).discover(plan, ctx());
+    expect(JSON.stringify(withKey.diagnostic)).not.toContain("secretKey12345");
   });
 });
 

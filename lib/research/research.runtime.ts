@@ -21,7 +21,7 @@ const options = resolveRuntimeOptions(process.env);
 const providers = [
   new OfficialDocsProvider({ fetchImpl: (url, init) => fetch(url, init) }),
   new CrossrefProvider({ contactEmail: options.contactEmail, fetchImpl: (url, init) => fetch(url, init) }),
-  new OpenAlexProvider({ contactEmail: options.contactEmail, fetchImpl: (url, init) => fetch(url, init) }),
+  new OpenAlexProvider({ contactEmail: options.contactEmail, apiKey: options.openAlexApiKey, fetchImpl: (url, init) => fetch(url, init) }),
 ];
 
 export function createResearchDeps(userId: string): ResearchDeps {
