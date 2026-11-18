@@ -1,26 +1,102 @@
 @import "tailwindcss";
 
+/*
+ * Brand palette
+ *   Obsidian       #101820  page background
+ *   Deep Slate     #1F3444  cards / panels
+ *   Signal Teal    #00B8A9  primary accent
+ *   Evidence Amber #FFB454  warnings / evidence highlights
+ *   Mist           #E8EEF2  primary text
+ *   White          #FFFFFF
+ *
+ * The components use Tailwind's `stone-*` (neutrals), `orange-*` (primary
+ * accent) and `amber-*` (evidence/warning) utilities, so the scales below
+ * re-point those utilities at the brand colours app-wide.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --obsidian: #101820;
+  --deep-slate: #1f3444;
+  --signal-teal: #00b8a9;
+  --evidence-amber: #ffb454;
+  --mist: #e8eef2;
+  --white: #ffffff;
+
+  --background: var(--obsidian);
+  --foreground: var(--mist);
 }
 
-@theme inline {
+@theme {
+  /* Neutrals: Obsidian -> Deep Slate -> Mist */
+  --color-stone-50: #f6f9fb;
+  --color-stone-100: #e8eef2;
+  --color-stone-200: #d3dce3;
+  --color-stone-300: #b9c6d0;
+  --color-stone-400: #94a6b4;
+  --color-stone-500: #71879a;
+  --color-stone-600: #4f677b;
+  --color-stone-700: #36505f;
+  --color-stone-800: #28404f;
+  --color-stone-900: #1f3444;
+  --color-stone-950: #101820;
+
+  /* Primary accent: Signal Teal */
+  --color-orange-50: #e6faf8;
+  --color-orange-100: #c2f3ef;
+  --color-orange-200: #94ebe4;
+  --color-orange-300: #5ddfd4;
+  --color-orange-400: #25ccbd;
+  --color-orange-500: #00b8a9;
+  --color-orange-600: #00958a;
+  --color-orange-700: #00746c;
+  --color-orange-800: #00574f;
+  --color-orange-900: #003d38;
+  --color-orange-950: #00241f;
+
+  /* Evidence / warning: Evidence Amber */
+  --color-amber-50: #fff8ec;
+  --color-amber-100: #ffeed2;
+  --color-amber-200: #ffdfa8;
+  --color-amber-300: #ffcc80;
+  --color-amber-400: #ffb454;
+  --color-amber-500: #f59e2a;
+  --color-amber-600: #d98314;
+  --color-amber-700: #b06610;
+  --color-amber-800: #8a4f12;
+  --color-amber-900: #6e4013;
+  --color-amber-950: #3f2108;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: rgba(0, 184, 169, 0.35);
+  color: var(--white);
+}
+
+/* React Flow (dependency graph) — align built-in dark theme with the brand */
+.react-flow.dark,
+.react-flow {
+  --xy-background-color: #101820;
+  --xy-background-pattern-dots-color: #28404f;
+  --xy-minimap-background-color: #1f3444;
+  --xy-minimap-mask-background-color: rgba(16, 24, 32, 0.7);
+  --xy-controls-button-background-color: #1f3444;
+  --xy-controls-button-background-color-hover: #28404f;
+  --xy-controls-button-color: #e8eef2;
+  --xy-controls-button-border-color: #36505f;
+  --xy-edge-label-background-color: #101820;
+  --xy-edge-label-color: #94a6b4;
 }

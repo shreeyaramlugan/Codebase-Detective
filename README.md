@@ -2,798 +2,344 @@
 
 **Investigate codebases. Understand their structure. Discover what matters.**
 
-Codebase Detective is a full-stack codebase investigation platform designed to help developers understand unfamiliar repositories through deterministic code analysis, source-grounded AI explanations and research-backed recommendations.
+Codebase Detective is a full-stack platform that helps developers understand unfamiliar repositories. It combines deterministic static analysis, rule-based findings, source-grounded AI explanations and research-backed recommendations, so that every conclusion can be traced back to evidence.
 
-The project is being developed incrementally as a technically advanced portfolio project using TypeScript, Next.js, PostgreSQL and Prisma.
+Built with TypeScript, Next.js, PostgreSQL and Prisma.
 
-> **Current development status: Sprint 01 — Repository registration and indexing job management.**
-
-The current indexing processor is a development-only metadata simulation. Actual source-code ingestion, parsing, dependency analysis and findings are planned for subsequent sprints.
+> **Project status: complete (Sprints 00–09).** All planned capabilities, from repository ingestion to production deployment with a separate background worker, are implemented.
 
 ---
 
 ## Table of Contents
 
-- [Project Overview](#project-overview)
+- [Overview](#overview)
+- [Key Capabilities](#key-capabilities)
 - [Technology Stack](#technology-stack)
-- [Current Features](#current-features)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
-- [Database Setup](#database-setup)
+- [Running Modes](#running-modes)
 - [Development Commands](#development-commands)
-- [Indexing Job Processing](#indexing-job-processing)
+- [Production Deployment](#production-deployment)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
-- [Development Roadmap](#development-roadmap)
-- [Security Considerations](#security-considerations)
-- [Current Limitations](#current-limitations)
+- [Security and Integrity](#security-and-integrity)
+- [Limitations](#limitations)
+- [Development History](#development-history)
+- [Documentation](#documentation)
 
 ---
 
-## Project Overview
+## Overview
 
-Understanding an unfamiliar codebase can be time-consuming, particularly when a developer needs to identify its architecture, dependencies, important components and potential risks.
+Understanding an unfamiliar codebase is slow, particularly when you need to identify its architecture, dependencies, important components and risks. Codebase Detective makes that investigation faster without relying on AI guesswork.
 
-Codebase Detective aims to make that investigation easier through:
+The design follows one principle:
 
-1. Repository ingestion and source-code indexing.
-2. Deterministic AST-based code analysis.
-3. Symbol and dependency graph construction.
-4. Rule-based code findings.
-5. Source-grounded AI explanations.
-6. Research-backed recommendations.
+> **Deterministic analysis establishes the facts. AI explains them. Research supports the recommendations. Nothing is invented.**
 
-The platform prioritises reproducible analysis and traceable evidence rather than relying on AI-generated guesses.
+Each layer builds on the previous one:
+
+1. **Ingestion** stores an immutable, integrity-checked snapshot of a repository at a specific commit.
+2. **Code intelligence** parses that snapshot into symbols, dependencies, function calls and a graph, without executing any repository code.
+3. **Findings** apply versioned rules to the analysis and attach source evidence to every result.
+4. **Investigation** lets users ask questions that are answered from retrieved repository evidence, with validated citations.
+5. **Research** gathers official documentation and scholarly sources and produces recommendations that cite both the repository and external evidence.
+
+## Key Capabilities
+
+### Repository ingestion
+
+- Public GitHub repositories, ingested at an exact commit.
+- Immutable snapshots with per-file classification, SHA-256 integrity verification and completeness tracking (complete, partial or failed).
+- Idempotent retries and safe handling of rate limits, missing files and oversized content.
+- Source storage behind a provider-independent interface: local disk for development or any S3-compatible object storage for production.
+
+### Deterministic code intelligence
+
+- JavaScript, TypeScript, JSX, TSX, MJS and CJS parsing with the TypeScript Compiler API.
+- Extraction of functions, classes, methods, interfaces, types, variables and enums, with source locations.
+- Import, export and CommonJS analysis. Module resolution covers relative imports, path aliases and package metadata, and distinguishes resolved, unresolved, ambiguous and external dependencies.
+- Static call relationships, with confirmed and possible calls kept separate.
+- Immutable analysis runs and a regeneratable graph read model.
+
+### Interactive explorer
+
+- Repository overview, hierarchical file tree and syntax-highlighted source viewer.
+- Symbol explorer, unified search and an interactive dependency graph (React Flow) with filtering.
+- Unresolved relationships are never drawn as invented connections.
+
+### Findings engine
+
+- Versioned rules for dependency issues (unresolved imports, cycles, unused exports), complexity, code structure and static security indicators.
+- Every finding carries traceable evidence. Security results are reported as indicators, not confirmed vulnerabilities.
+- Review status management and comparison across snapshots (new, persistent, resolved) that does not treat partial analyses as resolutions.
+
+### AI investigation assistant
+
+- Provider-independent AI layer with a Google Gemini integration, structured output and automatic retry with an optional fallback model.
+- Database-backed evidence retrieval scoped to a repository and snapshot.
+- Answers include validated citations that link back to the source viewer, and the assistant states when evidence is insufficient.
+- Persistent conversations, daily and per-request usage limits, and prompt-injection safeguards for repository content.
+
+### Research engine
+
+- Discovery from official documentation, Crossref and OpenAlex, with source provenance, publication type and availability (full text, abstract or metadata only) recorded.
+- Research can start from a finding or a manual question. Users review sources before recommendations are generated.
+- Concise and detailed recommendations with validated repository and external citations, plus a managed lifecycle (save, rename, accept, reject, implemented, archive).
+- Immutable research runs with reusable sources, usage limits and protection against prompt injection from external content.
+
+### Production worker and operations
+
+- Durable PostgreSQL-backed job queue with atomic claiming, heartbeats, stale-job recovery, bounded retries with exponential back-off and graceful shutdown.
+- Separate worker process with health and readiness endpoints, structured logs and per-job resource limits.
+- The web application only enqueues work and returns immediately. Ingestion, analysis, findings and research run in the worker, and analysis starts automatically after a successful ingestion.
 
 ## Technology Stack
 
-| Layer                  | Technology                         |
-| ---------------------- | ---------------------------------- |
-| Language               | TypeScript                         |
-| Frontend               | React                              |
-| Framework              | Next.js App Router                 |
-| Styling                | Tailwind CSS                       |
-| Database               | PostgreSQL                         |
-| ORM                    | Prisma                             |
-| Authentication         | Better Auth                        |
-| Repository provider    | GitHub API                         |
-| Testing                | Vitest                             |
-| Development processing | tsx                                |
-| Hosting plan           | Vercel                             |
-| Worker architecture    | Separate persistent worker planned |
-
-## Current Features
-
-### Implemented
-
-- Email/password authentication.
-- GitHub OAuth configuration.
-- Protected dashboard access.
-- Authenticated GitHub repository submission.
-- Public repository metadata validation.
-- Repository ownership enforcement.
-- Duplicate repository detection.
-- Transactional repository and indexing-job creation.
-- Persistent indexing job records.
-- Job lifecycle management:
-  - PENDING
-  - PROCESSING
-  - COMPLETED
-  - FAILED
-- Retry handling with exponential backoff.
-- Maximum attempt enforcement.
-- Ownership-protected retry endpoint.
-- Dashboard repository status display.
-- Retry button with dashboard refresh.
-- Development-only metadata processing simulation.
-
-### Planned
-
-- Repository snapshot ingestion.
-- Source-code parsing using the TypeScript Compiler API.
-- Symbol extraction and indexing.
-- Dependency graph construction.
-- Deterministic code findings.
-- AI-powered explanations grounded in source evidence.
-- Research-backed recommendations.
-- Advanced codebase investigation features.
-
----
+| Layer | Technology |
+| --- | --- |
+| Language | TypeScript |
+| Framework | Next.js (App Router) and React |
+| Styling | Tailwind CSS |
+| Database | PostgreSQL (Neon) with Prisma ORM |
+| Authentication | Better Auth (email/password and GitHub OAuth) |
+| Code analysis | TypeScript Compiler API |
+| Graph visualisation | React Flow (`@xyflow/react`) |
+| AI | Google Gemini, behind a provider-independent interface |
+| Research sources | Official documentation, Crossref, OpenAlex |
+| Object storage | Any S3-compatible service (for example Cloudflare R2) |
+| Background processing | Dedicated TypeScript worker (`tsx`) |
+| Testing | Vitest |
+| Hosting | Vercel (web), Railway or another container host (worker) |
 
 ## Architecture
-
-The application currently follows a modular monolith architecture.
 
 ```text
 Browser
    |
    v
-Next.js Application
-   |
-   +---- Authentication (Better Auth)
-   |
-   +---- Dashboard
-   |
-   +---- API Routes
+Next.js application (Vercel)
+   |-- Authentication (Better Auth)
+   |-- Dashboard and explorer UI
+   |-- API routes (authenticated, owner-scoped)
    |        |
-   |        +---- Repository Submission
-   |        |
-   |        +---- Indexing Job Retry
+   |        +--> enqueue job, return 202
    |
-   +---- Application Services
-   |        |
-   |        +---- GitHub Validation
-   |        |
-   |        +---- Job Lifecycle
+   v
+PostgreSQL (Neon) <----------------------------+
+   ^   durable job queue, analyses, findings,   |
+   |   conversations, research                  |
+   |                                            |
+Background worker (Railway / Docker) -----------+
+   |-- Repository ingestion  --> GitHub API
+   |-- Code analysis         --> TypeScript Compiler API
+   |-- Findings generation
+   |-- Research discovery    --> official docs, Crossref, OpenAlex
+   |-- Research synthesis    --> Gemini
    |
-   +---- Prisma ORM
-            |
-            v
-       PostgreSQL
+   v
+Object storage (S3-compatible) or local disk
+   immutable, hash-verified source files
 ```
 
-A separate persistent worker will be introduced in a later sprint.
+The web application and the worker share the same database and the same storage. A worker never needs a browser session, and a failed worker job never corrupts completed snapshots or analyses.
 
 ## Getting Started
 
 ### Prerequisites
 
-Install the following:
-
-- Node.js
-- npm
+- Node.js 22 or later and npm
 - Git
-- PostgreSQL database (local or hosted)
-- GitHub account
+- A PostgreSQL database (local, or a hosted service such as Neon)
+- A GitHub account (for OAuth and API access)
 
-### 1. Clone the repository
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/codebase-detective.git
 cd codebase-detective
-```
-
-Replace `YOUR_USERNAME` with the GitHub account hosting the project.
-
-### 2. Install dependencies
-
-```bash
 npm install
 ```
 
-### 3. Configure environment variables
-
-Create a local environment file:
+### 2. Configure the environment
 
 ```bash
 cp .env.example .env
 ```
 
-On Windows PowerShell:
+On Windows PowerShell: `Copy-Item .env.example .env`.
 
-```powershell
-Copy-Item .env.example .env
-```
+Fill in the values described in [Environment Variables](#environment-variables). Never commit `.env`.
 
-Populate the required values in `.env`.
-
-Never commit `.env` or expose authentication secrets.
-
-### 4. Configure the database
-
-Create a PostgreSQL database and configure its connection string in `DATABASE_URL`.
-
-Apply migrations:
+### 3. Prepare the database
 
 ```bash
 npx prisma migrate dev
-```
-
-Generate the Prisma Client:
-
-```bash
 npx prisma generate
 ```
 
-Check migration status:
+### 4. Start the application and the worker
+
+Use two terminals:
 
 ```bash
-npx prisma migrate status
+npm run dev      # web application at http://localhost:3000
+npm run worker   # background worker (ingestion, analysis, findings, research)
 ```
 
-### 5. Start the development server
-
-```bash
-npm run dev
-```
-
-Open:
-
-http://localhost:3000
-
----
+Add a repository in the dashboard. Ingestion, analysis and findings then run in the worker.
 
 ## Environment Variables
 
-Create `.env` in the project root.
+`.env.example` documents every variable. The essential ones are:
 
-| Variable               | Description                     |
-| ---------------------- | ------------------------------- |
-| `DATABASE_URL`         | PostgreSQL connection string    |
-| `BETTER_AUTH_SECRET`   | Authentication signing secret   |
-| `BETTER_AUTH_URL`      | Better Auth base URL            |
-| `NEXT_PUBLIC_APP_URL`  | Application base URL            |
-| `GITHUB_CLIENT_ID`     | GitHub OAuth application ID     |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth application secret |
-| `AI_PROVIDER`          | AI provider selection           |
-| `AI_MODEL`             | Selected AI model               |
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string (use the pooled URL for hosted databases) |
+| `BETTER_AUTH_SECRET` | Session signing secret (32 or more random characters) |
+| `BETTER_AUTH_URL` | Public base URL of the application |
+| `NEXT_PUBLIC_APP_URL` | Public base URL used by the browser (set at build time) |
+| `TRUSTED_ORIGINS` | Optional extra origins allowed for authentication |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub OAuth application |
+| `GITHUB_TOKEN` | Raises the GitHub API limit for ingestion; no scopes needed for public repositories |
+| `AI_PROVIDER` | `gemini` for real answers, `mock` for development |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | Gemini credentials, model and optional fallback |
+| `AI_REQUEST_TIMEOUT_MS` | Provider timeout (60000 recommended) |
+| `OPENALEX_API_KEY` | Free OpenAlex key (required by OpenAlex) |
+| `RESEARCH_CONTACT_EMAIL` | Identifies the application to Crossref |
+| `SOURCE_STORAGE_PROVIDER` | `local` or `s3` |
+| `SOURCE_STORAGE_ROOT` | Directory for local storage |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | S3-compatible object storage |
+| `BACKGROUND_EXECUTION` | `worker` in production |
+| `WORKER_*`, `LOG_LEVEL` | Worker concurrency, timeouts, health endpoint and logging |
 
-### Example configuration
+Only `NEXT_PUBLIC_*` variables are exposed to the browser. Keys and secrets are read on the server only.
 
-```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
+To validate a production configuration before deploying:
 
-BETTER_AUTH_SECRET="GENERATE_A_RANDOM_SECRET"
-BETTER_AUTH_URL="http://localhost:3000"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-
-GITHUB_CLIENT_ID="YOUR_GITHUB_CLIENT_ID"
-GITHUB_CLIENT_SECRET="YOUR_GITHUB_CLIENT_SECRET"
-
-AI_PROVIDER="mock"
-AI_MODEL="mock-v1"
+```bash
+npm run check:env -- web
+npm run check:env -- worker
 ```
 
-The mock AI configuration is a development placeholder. It does not represent a configured production AI provider.
+## Running Modes
 
-Generate a secure authentication secret rather than using the example value.
+| | Local or self-hosted (one machine) | Hosted (Vercel plus a worker host) |
+| --- | --- | --- |
+| Snapshot storage | `SOURCE_STORAGE_PROVIDER=local` | `SOURCE_STORAGE_PROVIDER=s3` |
+| Web application | `npm run dev` | Vercel |
+| Worker | `npm run worker` on the same machine | Railway, Fly.io or any Docker host |
 
----
-## Quick Start
+Two rules keep both modes safe:
 
-ThreatWeaver is developed locally using Windows, PowerShell and Docker Desktop.
+- The web application and the worker must see the same storage. Local disk is shared only when both run on one machine, so a hosted deployment must use S3-compatible storage. Running the production build on a single machine with local storage requires `ALLOW_LOCAL_STORAGE=true`.
+- Never run a local worker against the production database. Any worker connected to a database claims its queued jobs.
 
-### Prerequisites
+## Development Commands
 
-Install the following:
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the development server |
+| `npm run worker` | Start the background worker |
+| `npm run worker:dev` | Start the worker with automatic restart |
+| `npm run build` / `npm start` | Production build and server |
+| `npm test` | Run the full test suite |
+| `npm run test:coverage` | Run tests with coverage |
+| `npm run typecheck` | TypeScript type checking |
+| `npm run lint` / `npm run format:check` | Linting and formatting checks |
+| `npm run check:env -- web\|worker` | Validate production environment variables |
+| `npm run migrate:deploy` | Apply database migrations (production workflow) |
 
-| Tool | Requirement |
-|---|---|
-| Git | Installed |
-| Python | 3.13.x |
-| Node.js | 22.x |
-| npm | 11.x |
-| Docker Desktop | Installed and running |
-| Docker Compose | Available through Docker Desktop |
+## Production Deployment
 
-### 1. Configure Environment Variables
+The reference deployment uses Vercel for the web application, Neon for PostgreSQL, Cloudflare R2 for snapshot storage and Railway for the worker. The repository includes `Dockerfile.worker`, an example `fly.worker.toml`, a manual GitHub workflow for applying migrations and security headers configured in `next.config.ts`.
 
-Create the local environment file:
+Key points:
 
-```powershell
-Copy-Item .env.example .env
+- Apply migrations with the **direct** (non-pooled) database URL, forwards only. Never reset or push a schema to production.
+- Use the same bucket and credentials for the web application and the worker.
+- Set `NEXT_PUBLIC_APP_URL` before the build and rebuild after changing it. It is embedded at build time.
+- Release order when migrations are included: migrate, deploy the worker, then deploy the web application.
+- The web application can be rolled back instantly from Vercel. The worker is rolled back by redeploying the previous image.
+
+The full guide, including the first-release sequence, smoke test, backup and rollback procedures and troubleshooting, is in [docs/deployment.md](docs/deployment.md).
+
+## Testing
+
+```bash
+npm test
 ```
 
-If `.env` already exists, do not overwrite it.
+The suite contains more than 1,200 automated tests across unit, integration and security categories, covering parsing and extraction, module resolution, graph construction, the rule engine, findings comparison, the AI assistant and citation validation, the research engine, storage adapters, the job queue and worker lifecycle, and API ownership and isolation.
 
-Configure the PostgreSQL password in `.env`.
+Some integration tests run against a real PostgreSQL database configured through `DATABASE_URL`. Use a development database for them, never production. Run `npm run typecheck` as well: `npm run build` type-checks test files, and a type error there fails the deployment.
 
-See [Environment Setup](docs/environment_setup.md) for configuration and security requirements.
+## Project Structure
 
-### 2. Start PostgreSQL
-
-From the repository root:
-
-```powershell
-docker compose up -d
+```text
+app/            Next.js routes, pages and API handlers
+components/     Shared React components
+features/       Domain modules: analysis, code-intelligence, explorer,
+                findings, ai, research, repositories
+lib/            Services: ingestion, storage, jobs, worker, auth, GitHub,
+                research runtime, configuration
+worker/         Worker entry point
+prisma/         Schema and migrations
+rules/          Findings rule definitions
+scripts/        Operational scripts (environment checks, job processing)
+tests/          Unit, integration and security tests
+docs/           Deployment and technical documentation
 ```
 
-Check the database container:
+## Security and Integrity
 
-```powershell
-docker compose ps
-```
+- Every protected route requires authentication. Repositories, snapshots, analyses, findings, conversations and research are scoped to the owning user, and cross-user access returns not found.
+- Repository source code is analysed statically and is never executed.
+- Source files are verified against SHA-256 hashes on read. Corrupt or missing objects produce safe errors.
+- Repository content and external documents are treated as untrusted data in AI prompts. Citations and sources must exist in retrieved evidence or they are rejected.
+- Secrets exist only in environment variables, are read server-side, and are never written to logs. Tests check that client code never references AI or storage credentials.
+- Error responses do not expose internal details, storage paths or credentials.
+- Security headers are set on all responses, including HSTS, frame denial and content-type protection. A Content-Security-Policy is not yet configured.
+- AI usage, research usage and job workloads are bounded by configurable limits.
 
-Wait for the PostgreSQL health status to report `healthy`.
+## Limitations
 
-### 3. Start the Backend
+- Only public GitHub repositories are supported.
+- Analysis covers JavaScript and TypeScript. Other languages are stored but not analysed.
+- Static analysis does not resolve dynamic behaviour. Calls and imports that cannot be established are reported as possible, unresolved or ambiguous.
+- Security findings are indicators for investigation and are not confirmed vulnerabilities.
+- Marking a recommendation as implemented records the user's status. It does not verify any code change.
+- Recommendations depend on the sources retrieved. Where only abstracts or metadata were available, the output says so.
+- Snapshots created under local storage are not migrated automatically when switching to S3 storage and must be ingested again.
+- Third-party services (GitHub, Gemini, Crossref, OpenAlex) apply their own rate limits and terms.
 
-Create and activate the Python virtual environment:
+## Development History
 
-```powershell
-py -m venv backend\.venv
-.\backend\.venv\Scripts\Activate.ps1
-```
+The project was built in ten sprints. Each was completed only after its acceptance criteria and verification tests passed.
 
-Install development dependencies:
+| Sprint | Focus | Outcome |
+| --- | --- | --- |
+| 00 | Project foundation and infrastructure | Next.js, Prisma, tooling and conventions |
+| 01 | Authentication, repositories and durable jobs | Better Auth, repository registration, persistent job lifecycle with retries |
+| 02 | Repository snapshot ingestion | Commit-based ingestion, immutable snapshots, classification, hash-verified storage |
+| 03 | Code intelligence engine | Parsing, symbols, module resolution, call relationships, dependency graph |
+| 04 | Interactive codebase explorer | File tree, source viewer, symbol explorer, graph and unified search |
+| 05 | Deterministic findings engine | Versioned rules, evidence-backed findings, snapshot comparison |
+| 06 | AI investigation assistant | Gemini integration, evidence retrieval, validated citations, conversations |
+| 07 | Research engine | Official documentation, Crossref and OpenAlex, research-backed recommendations |
+| 08 | Production worker | Durable queue, worker process, recovery, health checks, resource controls |
+| 09 | Deployment and release | Vercel, Neon, S3-compatible storage, hosted worker, security configuration, documentation |
 
-```powershell
-python -m pip install -r backend\requirements-dev.txt
-```
-
-Start the FastAPI development server:
-
-```powershell
-python -m uvicorn app.main:app --app-dir backend --reload
-```
-
-Backend: `http://127.0.0.1:8000`
-
-API documentation: `http://127.0.0.1:8000/docs`
-
-Health check: `http://127.0.0.1:8000/health`
-
-See [Backend Setup](docs/backend_setup.md) for detailed instructions.
-
-### 4. Start the Frontend
-
-Open a separate PowerShell terminal:
-
-```powershell
-cd frontend
-npm ci
-npm run dev
-```
-
-Frontend: `http://localhost:3000`
-
-See [Frontend Setup](docs/frontend_setup.md) for detailed instructions.
-
-### 5. Stop Development Services
-
-Stop the frontend and backend servers using `CTRL + C` in their respective terminals.
-
-Stop PostgreSQL:
-
-```powershell
-docker compose stop
-```
-
-To stop and remove the PostgreSQL container and Compose network:
-
-```powershell
-docker compose down
-```
-
-The named PostgreSQL volume is retained.
-
-**Warning:** Do not use `docker compose down -v` unless you deliberately intend to delete the database volume and its data.
-
-## Additional Documentation
+## Documentation
 
 | Document | Description |
-|---|---|
-| [Environment Setup](docs/environment_setup.md) | Environment variables and secrets management |
-| [Backend Setup](docs/backend_setup.md) | Python, FastAPI and backend development |
-| [Frontend Setup](docs/frontend_setup.md) | Next.js and frontend development |
-| [Sprint Planning](docs/sprint%20planning/) | Sprint specifications |
-| [Software Requirements](docs/SRS/) | Software Requirements Specification |
-| [System Architecture](docs/System%20Architecture%20and%20Tech/) | Architecture and technical decisions |
-| [Decision Log](docs/decision_log.md) | Project decision history |
-| [Roadmap](roadmap.md) | Project development roadmap |
-
-## Development Roadmap
-
-The project is divided into ten implementation sprints.
-
-| Sprint    | Focus                                              |
-| --------- | -------------------------------------------------- |
-| Sprint 00 | Project foundation and infrastructure              |
-| Sprint 01 | Authentication, repositories and durable jobs      |
-| Sprint 02 | Repository snapshot ingestion                      |
-| Sprint 03 | Parsing and symbol indexing                        |
-| Sprint 04 | Dependency and relationship analysis               |
-| Sprint 05 | Deterministic findings and rules                   |
-| Sprint 06 | Source-grounded AI investigation                   |
-| Sprint 07 | Research-backed recommendations                    |
-| Sprint 08 | Persistent worker and production resource controls |
-| Sprint 09 | Deployment, hardening and final release            |
-
-Features will be marked complete only after their acceptance criteria and verification tests pass.
+| --- | --- |
+| [docs/deployment.md](docs/deployment.md) | Deployment, operations, backup, rollback and troubleshooting |
+| [docs/sprints/](docs/sprints/README.md) | A record for each sprint: objective, deliverables, decisions and verification |
+| [.env.example](.env.example) | Complete environment variable reference |
+| [features/README.md](features/README.md) | Feature module overview |
 
 ---
 
-## Security Considerations
-
-The project follows these principles:
-
-- Authentication required for protected application routes.
-- Repository records are scoped to their owning user.
-- Job operations verify repository ownership.
-- Repository URLs are validated against the supported GitHub host.
-- Repository and job creation use database transactions.
-- Duplicate repository submissions are rejected.
-- Retry operations enforce job lifecycle and attempt limits.
-- Secrets are stored in environment variables, not source code.
-- Repository source code will not be executed during indexing.
-
-Additional production security controls will be introduced in later sprints.
-
----
-
-## Current Limitations
-
-Codebase Detective is actively under development.
-
-At the current Sprint 01 stage:
-
-- Only public GitHub repository registration is supported.
-- Repository metadata is validated and stored.
-- Indexing jobs are persisted and tracked.
-- The development processor performs metadata simulation only.
-- Actual source-code parsing is not implemented.
-- Dependency graphs are not implemented.
-- Deterministic findings are not implemented.
-- Production AI investigation is not implemented.
-- The persistent production worker is not implemented.
-- Production deployment is deferred to Sprint 09.
-
-The dashboard's completed indexing status must not be interpreted as completed code analysis.
-
----
-
-## Project Philosophy
-
-Codebase Detective is being built around a simple principle:
-
-**Every insight should be explainable, traceable and grounded in evidence.**
-
-The goal is not simply to ask AI what a codebase does. It is to build a system that can investigate the underlying code, identify relationships and explain its conclusions with supporting evidence.
-
-Built with TypeScript, Next.js, PostgreSQL and a healthy amount of curiosity.
-
-## Sprint Tracking
-
-# Sprint 01 — Completion Record
-
-**Sprint:** 01 — Repository Registration and Indexing Job Management  
-**Status:** Complete — technical and manual acceptance checks passed  
-**Automated tests:** 190 passed across 18 test files
-
-### Delivered
-
-- Email/password and GitHub OAuth authentication.
-- Protected dashboard access.
-- GitHub repository URL validation and metadata retrieval.
-- Repository persistence with ownership enforcement.
-- Duplicate repository prevention.
-- Atomic repository and indexing-job creation.
-- Persistent indexing-job lifecycle management.
-- Retry scheduling, attempt limits and failure handling.
-- Development-only metadata processing simulation.
-- Dashboard repository status and retry integration.
-- Integration tests for job lifecycle and concurrency.
-- Updated README and environment documentation.
-
-### Verification
-
-- TypeScript: passed.
-- ESLint: zero errors; five non-blocking warnings.
-- Prisma schema validation: passed.
-- Database migrations: up to date.
-- Automated tests: 190/190 passed.
-- Production build: passed.
-- Prettier formatting: passed.
-- Manual repository submission: passed.
-- Manual duplicate submission: passed.
-- Manual retry and dashboard refresh: passed.
-- GitHub OAuth login: manually verified.
-
-### Known limitations
-
-The development processor validates repository metadata and simulates successful indexing. It does not yet download source code, parse files, construct dependency graphs or generate deterministic code findings.
-
-These capabilities remain assigned to subsequent sprints.
-
-### Completion decision
-
-Sprint 01 acceptance checks are satisfied. The project is ready to proceed to Sprint 02, subject to the normal project-level review and version-control checkpoint.
-
-### Sprint 02 — GitHub Ingestion & Repository Snapshots
-
-**Status: Complete**
-
-Implemented commit-based GitHub repository ingestion, immutable
-repository snapshots, file classification, source storage,
-content integrity verification, snapshot completeness tracking,
-idempotent retries and owner-protected source retrieval.
-
-### Sprint 03 — Code Intelligence Engine
-
-**Status: Complete**
-
-Implemented the deterministic, non-executing code intelligence engine using the TypeScript Compiler API. The engine parses JavaScript and TypeScript source files, including JSX and TSX, extracts code structures and symbols, resolves module dependencies, identifies statically traceable function calls, and generates a structured dependency graph.
-
-**### Delivered**
-
-- JavaScript, TypeScript, JSX and TSX parsing.
-- AST-based extraction of functions, classes, methods, interfaces, types, variables and enums.
-- Import, export and CommonJS analysis.
-- Source-location tracking for extracted code structures and relationships.
-- Stable symbol identification and symbol registry.
-- Module resolution supporting relative imports, path aliases, package metadata and CommonJS.
-- Explicit handling of resolved, unresolved, ambiguous and external dependencies.
-- Static function-call relationship extraction, including uncertain call identification.
-- Dependency graph generation with structured nodes, edges and relationship evidence.
-- Relational persistence of analysis records, symbols, dependencies and diagnostics.
-- Derived, regeneratable graph JSON read model.
-- Immutable analysis runs, preserving previous results and failed runs.
-- Analysis engine and parser version tracking.
-- Foundation for future incremental analysis.
-- Authenticated, owner-protected analysis and result retrieval.
-- Parser, extraction, resolver, graph, integration and security tests.
-- Updated technical documentation and README.
-
-**### Completion decision**
-
-Sprint 03 acceptance criteria are satisfied. The project now has a deterministic code intelligence foundation capable of transforming stored repository snapshots into structured, traceable code representations. The analysis engine does not execute repository code or rely on AI to establish code structures and dependencies.
-
-The project is ready to proceed to Sprint 04, subject to the normal project-level review and version-control checkpoint.
-Sprint 04 — Interactive Codebase Explorer
-
-Status: Complete
-
-Implemented the interactive Codebase Explorer, providing a user-facing interface for navigating and investigating repository snapshots and their associated code analysis results. The explorer connects the deterministic code intelligence produced in Sprint 03 to an integrated interface for browsing repository structure, inspecting source code, exploring symbols, visualising dependencies and searching across the codebase.
-
-### Delivered
-
-Repository overview displaying repository metadata, selected snapshots, commit information and analysis status.
-
-Repository statistics covering files, symbols, dependencies and analysis results.
-
-Hierarchical file explorer with nested folder navigation and file selection.
-
-Source code viewer with syntax highlighting and line numbers.
-
-Source navigation using extracted symbol locations.
-
-Symbol explorer for browsing functions, classes, methods, interfaces, types, variables and enums.
-
-Symbol search and filtering by relevant categories.
-
-Symbol details and parent-child relationship navigation.
-
-Interactive dependency graph using React Flow.
-
-Graph navigation with zoom, pan, node selection and relationship inspection.
-
-Graph filtering by node and edge types.
-
-Visual distinction between confirmed and possible function-call relationships.
-
-Handling of unresolved and external dependencies without inventing relationships.
-
-Unified codebase search across files, paths, symbols, modules and exports.
-
-Navigation between search results, source files, symbols and graph entities.
-
-Integration with Sprint 02 repository snapshots and Sprint 03 analysis results.
-
-Owner-protected access to repository and source information.
-
-Handling of loading, empty, partial-analysis and error states.
-
-Integration, navigation, security and regression testing.
-
-Updated technical documentation and README.
-
-### Completion decision
-
-Sprint 04 acceptance criteria are satisfied. The project now provides an interactive interface for exploring repository structure and investigating the code intelligence generated by Sprint 03.
-
-Users can navigate repository files, inspect source code, locate extracted symbols, explore dependency relationships and search across the analysed codebase. The explorer uses persisted analysis results and preserves the distinction between confirmed, possible and unresolved relationships.
-
-The project is ready to proceed to Sprint 05, subject to the normal project-level review and version-control checkpoint.
-### Sprint 05 — Deterministic Findings Engine
-
-**Status: Complete**
-
-Implemented the deterministic, rule-based findings engine, extending the code intelligence foundation from Sprint 03 to identify codebase issues and architectural observations. The engine evaluates analysed repository data against versioned rules, generates structured findings, preserves supporting source evidence and provides an interface for investigating findings and tracking changes across repository snapshots.
-
-**### Delivered**
-
-- Deterministic rule engine with structured rule registration and evaluation.
-- Stable rule identifiers and version tracking.
-- Dependency analysis rules for unresolved internal imports and circular dependencies.
-- Unused export detection where supported by available analysis evidence.
-- Code complexity metrics and configurable thresholds.
-- Structural analysis for empty modules, unusually large modules and repeated patterns.
-- Static security indicator rules with evidence-based reporting.
-- Structured finding generation with categories, severity and descriptions.
-- Finding evidence tracking linked to repository snapshots, analysis runs, files and symbols.
-- Relational persistence of findings and supporting evidence.
-- Finding deduplication within individual analysis runs.
-- Findings dashboard with overview statistics and categorisation.
-- Finding search and filtering by severity and category.
-- Detailed finding views with supporting evidence and recommendations.
-- Navigation from findings to affected source files and locations.
-- Snapshot finding comparison.
-- Classification of findings as new, persistent or resolved.
-- Preservation of finding history across immutable analysis runs.
-- Handling of partial analysis results to prevent unsupported resolution claims.
-- Authenticated, owner-protected findings and evidence retrieval.
-- Rule engine, finding generation, persistence, comparison, integration and security tests.
-- Updated technical documentation and README.
-
-**### Completion decision**
-
-Sprint 05 acceptance criteria are satisfied. Codebase Detective can now evaluate analysed repositories using deterministic rules and generate structured, evidence-backed findings.
-
-The platform identifies dependency issues, complexity concerns, structural observations and static security indicators. Findings are traceable to their originating rules, analysis runs and source evidence. The platform also supports investigating findings and tracking how they change across repository snapshots.
-
-The project is ready to proceed to Sprint 06, subject to the normal project-level review and version-control checkpoint.
-### Sprint 06 — AI Investigation Assistant
-
-**Status: Complete**
-
-Implemented the repository-specific AI Investigation Assistant, extending the deterministic code intelligence and findings capabilities from previous sprints with source-grounded AI explanations.
-
-The assistant uses the Google Gemini API through a provider-independent integration and retrieves evidence from Codebase Detective's existing database records. It allows users to investigate repository structure, understand files and symbols, explore dependencies, examine deterministic findings and ask questions about potential code changes.
-
-Responses are grounded in retrieved repository evidence and include validated source citations. The assistant preserves repository and snapshot context, supports persistent conversation management and enforces AI usage controls.
-
-**### Delivered**
-
-- Google Gemini API integration through a provider-independent AI architecture.
-- Centralised AI provider and model configuration.
-- Server-side AI credential management.
-- Database-backed repository evidence retrieval.
-- Retrieval of repository source files and documentation.
-- Retrieval of code symbols and source locations.
-- Retrieval of module dependencies and function-call relationships.
-- Retrieval of deterministic findings and supporting evidence.
-- Repository- and snapshot-scoped evidence retrieval.
-- Relevant evidence selection and bounded context assembly.
-- Repository-specific question answering and code explanations.
-- Cross-file implementation and relationship explanations.
-- Dependency and potential change-impact investigations.
-- Explanations of deterministic findings using their underlying evidence.
-- Explicit handling of confirmed, possible and unresolved relationships.
-- Uncertainty handling when sufficient evidence is unavailable.
-- Source-grounded AI responses with citation validation.
-- Inline clickable source citations.
-- Dedicated source references panel.
-- Source navigation integrated with the Interactive Codebase Explorer.
-- Snapshot-aware conversations with explicit snapshot switching.
-- Persistent conversation and message history.
-- Conversation creation, saving, renaming, archiving, restoration and deletion.
-- Provider, model and available usage metadata recording.
-- Daily user-level AI usage limits.
-- Per-request limits for questions and evidence context.
-- Request timeout, provider error and malformed response handling.
-- Completed-response delivery rather than streaming.
-- Loading, error and insufficient-evidence interface states.
-- Repository ownership and conversation access enforcement.
-- Snapshot and repository context isolation.
-- Prompt-injection safeguards for repository source code and documentation.
-- Protection against unsupported AI-generated findings, relationships and citations.
-- Integration, retrieval, provider, citation, conversation and security testing.
-- Updated technical documentation and README.
-
-**### Architecture and implementation decisions**
-
-| Area | Decision |
-|---|---|
-| AI provider | Google Gemini API |
-| Evidence retrieval | Database-backed retrieval |
-| Conversation snapshot behaviour | Explicit snapshot switching |
-| Citation presentation | Inline citations and source references panel |
-| Conversation history | Save, archive, rename and delete |
-| AI usage controls | Daily and per-request limits |
-| Response delivery | Display after completion |
-
-**### Completion decision**
-
-Sprint 06 acceptance criteria are satisfied. Codebase Detective now provides a repository-specific AI investigation assistant that uses existing deterministic analysis results and repository evidence to explain code structures, relationships and findings.
-
-The assistant does not replace the deterministic analysis or findings engines. It operates as an investigative and explanatory layer, using retrieved evidence to generate answers and validated source citations.
-
-Users can investigate their repositories through persistent, snapshot-aware conversations, navigate directly to cited source locations and manage their AI usage through daily and per-request limits.
-
-The project is ready to proceed to Sprint 07 — Research Engine, subject to the normal project-level review and version-control checkpoint.
-
-### Sprint 07 — Research Engine
-
-**Status: Planned**
-
-The next sprint will introduce a hybrid research engine combining official technical documentation and scholarly sources to support research-backed recommendations.
-
-Research outputs will complement the deterministic findings and source-grounded AI investigation capabilities established in earlier sprints.
-### Sprint 07 — Research Engine
-
-**Status: Complete**
-
-Implemented the hybrid Research Engine, extending Codebase Detective's deterministic findings and source-grounded AI investigation capabilities with external technical research and research-backed recommendations.
-
-The engine combines official technical documentation with scholarly publications to investigate identified codebase issues and technical questions. It supports research through official documentation sources, Crossref and OpenAlex, while preserving source provenance, publication information, evidence and citation traceability.
-
-Research discovery and recommendation generation are separate stages. Users can review collected sources before initiating recommendation generation. The engine combines approved research evidence with repository findings and codebase evidence to produce concise summaries and detailed technical recommendations.
-
-**### Delivered**
-
-- Hybrid research architecture combining official technical documentation and scholarly research.
-- Official documentation research provider integration.
-- Crossref scholarly publication discovery.
-- OpenAlex scholarly publication discovery.
-- Provider-independent research retrieval architecture.
-- Official documentation discovery using available APIs, structured feeds and search-based retrieval.
-- Scholarly publication metadata and abstract retrieval.
-- Retrieval of openly accessible full text where permitted.
-- Source normalisation and metadata preservation.
-- Canonical URL and external identifier handling.
-- Duplicate source detection and source reuse.
-- Publication classification, including peer-reviewed publications, preprints and other scholarly material.
-- Explicit identification of metadata-only, abstract-only and full-text source availability.
-- Research query generation from supported deterministic findings.
-- Manual technical research questions.
-- Finding-based and repository-contextual research workflows.
-- User-initiated research execution.
-- Separation of source discovery and recommendation generation.
-- Reviewable source collections before recommendation generation.
-- Research evidence extraction and management.
-- Source relevance and quality evaluation.
-- Preservation of publisher, author, publication date, source type and retrieval metadata where available.
-- Identification and disclosure of outdated or conflicting sources.
-- Integration with the existing Google Gemini AI provider.
-- Research synthesis combining deterministic findings, repository evidence and approved external research.
-- Concise recommendation summaries.
-- Detailed technical recommendations with supporting evidence.
-- Recommendation rationale, expected benefits, trade-offs and implementation considerations.
-- Repository and external research citation support.
-- Citation and evidence validation to prevent unsupported claims.
-- Immutable research runs preserving historical research results.
-- Reusable research sources across separate research runs.
-- Persistent research history.
-- Recommendation saving and renaming.
-- Recommendation acceptance and rejection.
-- Recommendation archiving and restoration.
-- Recommendation implementation-status tracking.
-- Research overview dashboard and research history.
-- Separate official documentation and scholarly source lists.
-- Source evidence panel and detailed research reports.
-- Per-request research limits.
-- Daily user-level research limits.
-- Provider rate-limit handling.
-- Configurable source retrieval limits.
-- Request timeouts and provider failure handling.
-- Repository ownership and research access enforcement.
-- Protection against external-source prompt injection.
-- Handling of unavailable sources, incomplete research and insufficient evidence.
-- Updated technical documentation and README.
-
-**### Architecture and implementation decisions**
-
-| Area | Decision |
-|---|---|
-| Research providers | Official documentation, Crossref and OpenAlex |
-| Documentation retrieval | Hybrid APIs, structured feeds, search discovery and public-page retrieval |
-| Scholarly retrieval | Metadata, abstracts and permitted open-access full text |
-| Research scope | Supported deterministic findings and manual research questions |
-| Research execution | User-initiated, with source review before synthesis |
-| Source quality | Prioritise official documentation and peer-reviewed research |
-| Recommendations | Concise summaries and detailed technical recommendations |
-| Recommendation management | Save, rename, archive, accept, reject and mark as implemented |
-| Research history | Reusable sources with immutable research runs |
-| Usage controls | Per-request, daily user, provider and configurable source limits |
-| Interface | Overview dashboard, separate source lists, evidence panel and detailed research reports |
-
-**### Research integrity and limitations**
-
-Research recommendations are grounded in retrieved repository evidence and external sources. The engine preserves the distinction between deterministic findings, repository evidence and external research.
-
-Preprints and other scholarly material are labelled appropriately rather than presented as peer-reviewed research. Recommendations must disclose limitations where only metadata or abstracts are available. Conflicting, outdated or unavailable sources must not be represented as verified supporting evidence.
-
-Marking a recommendation as implemented records the user's status update; it does not independently verify that the corresponding code change has been made or tested.
-
-The research engine does not replace the deterministic findings engine or the AI Investigation Assistant. It extends them with externally sourced technical knowledge and research-backed recommendations.
-
-**### Completion decision**
-
-Sprint 07 acceptance criteria are satisfied. Codebase Detective now extends beyond repository analysis and AI-assisted investigation to support research-backed technical recommendations.
-
-Users can initiate research from supported deterministic findings or submit their own technical questions, review discovered official and scholarly sources, and generate recommendations grounded in both repository evidence and external research.
-
-Research runs preserve their history, sources remain reusable, and recommendations can be managed throughout their lifecycle. Citation validation, source provenance, usage controls and research-integrity safeguards help ensure that recommendations remain traceable and evidence-based.
-
-The project is ready to proceed to Sprint 08 — Production Worker and Infrastructure, subject to the normal project-level review and version-control checkpoint.
+*Every insight should be explainable, traceable and grounded in evidence.*

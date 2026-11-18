@@ -140,7 +140,7 @@ export default function ProfileEditor({ name, email }: ProfileEditorProps) {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save changes"}
             </button>

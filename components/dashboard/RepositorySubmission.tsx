@@ -100,7 +100,7 @@ export default function RepositorySubmission() {
         <button
           type="submit"
           disabled={isSubmitting || !repositoryUrl.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-medium text-stone-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? (
             <>

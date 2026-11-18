@@ -365,18 +365,18 @@ export function edgeStyle(
   edge: Pick<GraphEdge, "type" | "resolution">,
 ): EdgeStyle {
   const base: Record<string, { color: string; label: string }> = {
-    IMPORTS: { color: "#a8a29e", label: "Imports" },
-    RE_EXPORTS: { color: "#d6d3d1", label: "Re-exports" },
+    IMPORTS: { color: "#94a6b4", label: "Imports" },
+    RE_EXPORTS: { color: "#b9c6d0", label: "Re-exports" },
     EXPORTS: { color: "#34d399", label: "Exports" },
-    DECLARES: { color: "#78716c", label: "Declares" },
-    CONTAINS: { color: "#78716c", label: "Contains" },
-    CALLS: { color: "#60a5fa", label: "Calls" },
-    POSSIBLY_CALLS: { color: "#fbbf24", label: "Possibly calls" },
-    EXTENDS: { color: "#c084fc", label: "Extends" },
-    IMPLEMENTS: { color: "#f472b6", label: "Implements" },
-    REFERENCES: { color: "#2dd4bf", label: "References" },
+    DECLARES: { color: "#4f677b", label: "Declares" },
+    CONTAINS: { color: "#4f677b", label: "Contains" },
+    CALLS: { color: "#7db8f0", label: "Calls" },
+    POSSIBLY_CALLS: { color: "#ffb454", label: "Possibly calls" },
+    EXTENDS: { color: "#b69cf5", label: "Extends" },
+    IMPLEMENTS: { color: "#f08fb8", label: "Implements" },
+    REFERENCES: { color: "#5ddfd4", label: "References" },
   };
-  const entry = base[edge.type] ?? { color: "#a8a29e", label: edge.type };
+  const entry = base[edge.type] ?? { color: "#94a6b4", label: edge.type };
   return {
     color: entry.color,
     label: entry.label,
@@ -386,14 +386,14 @@ export function edgeStyle(
 
 export function nodeColor(type: string): string {
   const colors: Record<string, string> = {
-    FILE: "#f97316",
-    FUNCTION: "#60a5fa",
-    CLASS: "#c084fc",
-    METHOD: "#818cf8",
-    INTERFACE: "#f472b6",
-    TYPE: "#2dd4bf",
-    VARIABLE: "#a3e635",
-    ENUM: "#fbbf24",
+    FILE: "#00b8a9",
+    FUNCTION: "#7db8f0",
+    CLASS: "#b69cf5",
+    METHOD: "#8e9cf0",
+    INTERFACE: "#f08fb8",
+    TYPE: "#5ddfd4",
+    VARIABLE: "#b7e36b",
+    ENUM: "#ffb454",
   };
-  return colors[type] ?? "#a8a29e";
+  return colors[type] ?? "#94a6b4";
 }

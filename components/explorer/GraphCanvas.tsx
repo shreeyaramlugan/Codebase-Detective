@@ -63,8 +63,8 @@ export default function GraphCanvas({
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
         style: {
-          background: "#1c1917",
-          color: "#e7e5e4",
+          background: "#1f3444",
+          color: "#e8eef2",
           border: `1.5px solid ${nodeColor(node.type)}`,
           borderRadius: node.type === "FILE" ? 6 : 14,
           fontSize: 12,
@@ -85,8 +85,8 @@ export default function GraphCanvas({
           source: edge.source,
           target: edge.target,
           label: edges.length <= LABEL_EDGE_LIMIT ? style.label : undefined,
-          labelStyle: { fill: "#a8a29e", fontSize: 10 },
-          labelBgStyle: { fill: "#0c0a09" },
+          labelStyle: { fill: "#94a6b4", fontSize: 10 },
+          labelBgStyle: { fill: "#101820" },
           interactionWidth: 18,
           markerEnd: { type: MarkerType.ArrowClosed, color: style.color },
           style: {
@@ -135,7 +135,7 @@ export default function GraphCanvas({
         zoomable
         nodeColor={(node) => {
           const source = nodes.find((n) => n.id === node.id);
-          return source ? nodeColor(source.type) : "#78716c";
+          return source ? nodeColor(source.type) : "#4f677b";
         }}
       />
     </ReactFlow>

@@ -4,6 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/client";
+import AuthShell, {
+  AuthDivider,
+  AuthLabel,
+  AuthStatus,
+  authInputClass,
+  authPrimaryButtonClass,
+  authSecondaryButtonClass,
+} from "@/components/auth/AuthShell";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -69,69 +77,73 @@ export default function SignInPage() {
   const isBusy = isLoading || isGitHubLoading;
 
   return (
-    <main className="mx-auto max-w-md p-8">
-      <h1 className="text-2xl font-bold">Sign in</h1>
-
-      <p className="mt-2 text-sm text-stone-500">
-        Welcome back to Codebase Detective.
-      </p>
-
+    <AuthShell
+      title="Sign in"
+      subtitle="Welcome back to Codebase Detective."
+      footer={
+        <>
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/auth/sign-up"
+            className="font-medium text-orange-400 hover:text-orange-300 hover:underline"
+          >
+            Create an account
+          </Link>
+        </>
+      }
+    >
       <form onSubmit={handleSignIn} className="mt-6 space-y-4">
-        <input
-          className="w-full rounded border p-3"
-          type="email"
-          placeholder="Email address"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          disabled={isBusy}
-        />
+        <div>
+          <AuthLabel htmlFor="email">Email address</AuthLabel>
+          <input
+            id="email"
+            className={authInputClass}
+            type="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={isBusy}
+          />
+        </div>
 
-        <input
-          className="w-full rounded border p-3"
-          type="password"
-          placeholder="Password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          disabled={isBusy}
-        />
+        <div>
+          <AuthLabel htmlFor="password">Password</AuthLabel>
+          <input
+            id="password"
+            className={authInputClass}
+            type="password"
+            placeholder="Your password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={isBusy}
+          />
+        </div>
 
         <button
           type="submit"
           disabled={isBusy}
-          className="w-full rounded bg-stone-900 p-3 text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className={authPrimaryButtonClass}
         >
           {isLoading ? "Signing in..." : "Sign in"}
         </button>
+
+        <AuthDivider />
 
         <button
           type="button"
           onClick={handleGitHubSignIn}
           disabled={isBusy}
-          className="w-full rounded border p-3 disabled:cursor-not-allowed disabled:opacity-50"
+          className={authSecondaryButtonClass}
         >
           {isGitHubLoading ? "Connecting to GitHub..." : "Continue with GitHub"}
         </button>
       </form>
 
-      {message && (
-        <p className="mt-4 text-sm" role="status" aria-live="polite">
-          {message}
-        </p>
-      )}
-
-      <p className="mt-6 text-center text-sm text-stone-600">
-        Don&apos;t have an account?{" "}
-        <Link
-          href="/auth/sign-up"
-          className="font-medium text-orange-700 hover:underline"
-        >
-          Create an account
-        </Link>
-      </p>
-    </main>
+      <AuthStatus message={message} />
+    </AuthShell>
   );
 }
